@@ -15,7 +15,7 @@ func main() {
 	const BlockSize int = 16
 
 	type pixel struct {
-		r, g, b, y float64
+		r, g, b, y uint8
 	}
 	type dctPx [][]pixel
 
@@ -34,6 +34,54 @@ func main() {
 		fmt.Printf("Error decoding the image: %v", err)
 	}
 
+
+
+	in := [][]float64{
+		{0, 1, 2, 3, 4, 5, 6, 7},
+	};
+	dcta := make([][]float64, len(in))
+
+	alpha := func(a float64) float64 {
+		if a == 0 {
+			return math.Sqrt(1.0 / 8)
+		} else {
+			return math.Sqrt(2.0 / 8)
+		}
+	}
+	var res float64
+	for i := 0; i < len(in); i++ {
+		dcta[i] = make([]float64, len(in[0]))
+		for j := 0; j < len(in[0]); j++ {
+			for x := 0; x < len(in); x++ {
+				for y := 0; y < len(in[0]); y++ {
+					//fmt.Println(in[y][x])
+					res += dct(float64(x), float64(y), float64(i), float64(j), float64(len(in)), float64(len(in[0]))) * in[i][j]
+				}
+			}
+			dcta[i][j] = res * alpha(float64(i)) * alpha(float64(j)) / 4.0
+		}
+	}
+	fmt.Println(dcta)
+	idcta := make([][]float64, len(in))
+	for x := 0; x < len(in); x++ {
+		idcta[x] = make([]float64, len(in[0]))
+		for y := 0; y < len(in[0]); y++ {
+			for i := 0; i < len(in); i++ {
+				for j := 0; j < len(in[0]); j++ {
+					//fmt.Println(in[y][x])
+					res += idct(float64(x), float64(y), float64(i), float64(j), float64(len(in)), float64(len(in[0]))) * dcta[x][y]
+				}
+			}
+			idcta[x][y] = res
+		}
+	}
+	fmt.Println(idcta)
+
+	os.Exit(2)
+
+
+
+
 	newImg := image.NewRGBA(img.Bounds())
 	dx, dy := img.Bounds().Max.X, img.Bounds().Max.Y
 	bdx, bdy := (dx - BlockSize + 1), (dy - BlockSize + 1)
@@ -50,18 +98,18 @@ func main() {
 					r, g, b, _ := img.At(x, y).RGBA()
 					yc, _, _ := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
 
-					br += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(r)
-					bg += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(g)
-					bb += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(b)
-					by += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(yc)
+					br += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(r)
+					bg += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(g)
+					bb += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(b)
+					by += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(yc)
 				}
 			}
 			// normalization
 			alpha := func(a float64) float64 {
 				if a == 0 {
-					return math.Sqrt(1.0 / max(dx, dy))
+					return math.Sqrt(1.0 / float64(dx))
 				} else {
-					return math.Sqrt(2.0 / max(dx, dy))
+					return math.Sqrt(2.0 / float64(dy))
 				}
 			}
 
@@ -71,7 +119,7 @@ func main() {
 			bb *= alpha(fi) * alpha(fj)
 			by *= alpha(fi) * alpha(fj)
 
-			dctPixels[i][j] = pixel{br, bg, bb, by}
+			dctPixels[i][j] = pixel{uint8(br), uint8(bg), uint8(bb), uint8(by)}
 			newImg.Set(i, j, color.RGBA{uint8(y), uint8(u), uint8(v), 255})
 		}
 	}
@@ -103,7 +151,7 @@ func YUVtoRGB(y, u, v uint32) (uint32, uint32, uint32) {
 	return uint32(r), uint32(g), uint32(b)
 }
 
-func clamp255(x uint32) uint8 {
+func clamp255(x float64) uint8 {
 	if x < 0 {
 		return 0
 	}
@@ -113,11 +161,24 @@ func clamp255(x uint32) uint8 {
 	return uint8(x)
 }
 
-func dct(x, y, i, j, n float64) float64 {
-	a := math.Cos(((2*x+1)*(i*math.Pi))/(2*n))
-	b := math.Cos(((2*y+1)*(j*math.Pi))/(2*n))
+func dct(x, y, u, v, w, h float64) float64 {
+	a := math.Cos(((2.0*x+1)*(u*math.Pi))/(2*w))
+	b := math.Cos(((2.0*y+1)*(v*math.Pi))/(2*h))
 
 	return a * b
+}
+
+func idct(x, y, u, v, w, h float64) float64 {
+	// normalization
+	alpha := func(a float64) float64 {
+		if a == 0 {
+			return math.Sqrt(1.0 / w)
+		} else {
+			return math.Sqrt(2.0 / h)
+		}
+	}
+
+	return dct(x, y, u, v, w, h) * alpha(u) * alpha(v)
 }
 
 // max returns the biggest value between two numbers.
