@@ -19,7 +19,9 @@ func main() {
 	}
 	type dctPx [][]pixel
 
-	var imageSet = make([]dctPx, 0)
+	var (
+		br, bg, bb, by float64
+	)
 
 	input, err := os.Open("test.jpg")
 	defer input.Close()
@@ -34,35 +36,46 @@ func main() {
 
 	newImg := image.NewRGBA(img.Bounds())
 	dx, dy := img.Bounds().Max.X, img.Bounds().Max.Y
-	bdx, bdy := (dx - BlockSize), (dy - BlockSize)
+	bdx, bdy := (dx - BlockSize + 1), (dy - BlockSize + 1)
 
-	for i := 0; i < bdx; i++ {
-		for j := 0; j < bdy; j++ {
+	dctPixels := make(dctPx, dx*dy)
+
+	for i := 0; i < dx; i++ {
+		dctPixels[i] = make([]pixel, dy)
+		for j := 0; j < dy; j++ {
 			r, g, b, _ := img.At(i, j).RGBA()
-			yc, u, v := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+			y, u, v := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+			for x := 0; x < bdx; x++ {
+				for y := 0; y < bdy; y++ {
+					r, g, b, _ := img.At(x, y).RGBA()
+					yc, _, _ := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
 
-			dctPixels := make(dctPx, BlockSize)
-
-			for x := 0; x < BlockSize; x++ {
-				for y := 0; y < BlockSize; y++ {
-					dctPixels[x] = make([]pixel, BlockSize)
-
-					br := dct(float64(x), float64(y), float64(i), float64(j), max(bdx, bdy)) * float64(r)
-					bg := dct(float64(x), float64(y), float64(i), float64(j), max(bdx, bdy)) * float64(g)
-					bb := dct(float64(x), float64(y), float64(i), float64(j), max(bdx, bdy)) * float64(b)
-					by := dct(float64(x), float64(y), float64(i), float64(j), max(bdx, bdy)) * float64(yc)
-
-					dctPixels[x][y] = pixel{br, bg, bb, by}
+					br += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(r)
+					bg += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(g)
+					bb += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(b)
+					by += dct(float64(x), float64(y), float64(i), float64(j), max(dx, dy)) * float64(yc)
 				}
 			}
-			imageSet = append(imageSet, dctPixels)
-			newImg.Set(i, j, color.RGBA{uint8(yc), uint8(u), uint8(v), 255})
+			// normalization
+			alpha := func(a float64) float64 {
+				if a == 0 {
+					return math.Sqrt(1.0 / max(dx, dy))
+				} else {
+					return math.Sqrt(2.0 / max(dx, dy))
+				}
+			}
 
-			//r1, g1, b1 := color.YCbCrToRGB(y, u, v)
-			//newImg.Set(i, j, color.RGBA{uint8(r1>>8), uint8(g1>>8), uint8(b1>>8), 255})
+			fi, fj := float64(i), float64(j)
+			br *= alpha(fi) * alpha(fj)
+			bg *= alpha(fi) * alpha(fj)
+			bb *= alpha(fi) * alpha(fj)
+			by *= alpha(fi) * alpha(fj)
+
+			dctPixels[i][j] = pixel{br, bg, bb, by}
+			newImg.Set(i, j, color.RGBA{uint8(y), uint8(u), uint8(v), 255})
 		}
 	}
-	fmt.Println(imageSet)
+	fmt.Println(dctPixels)
 
 	output, err := os.Create("output.png")
 	if err != nil {
@@ -101,15 +114,10 @@ func clamp255(x uint32) uint8 {
 }
 
 func dct(x, y, i, j, n float64) float64 {
-	// normalization
-	alpha := func(a float64) float64 {
-		if a == 0 {
-			return math.Sqrt(1.0 / n)
-		} else {
-			return math.Sqrt(2.0 / n)
-		}
-	}
-	return alpha(i) * alpha(j) * math.Cos(((2*x+1)*(i*math.Pi))/(2*n)) * math.Cos(((2*y+1)*(j*math.Pi))/(2*n))
+	a := math.Cos(((2*x+1)*(i*math.Pi))/(2*n))
+	b := math.Cos(((2*y+1)*(j*math.Pi))/(2*n))
+
+	return a * b
 }
 
 // max returns the biggest value between two numbers.
