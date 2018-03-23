@@ -58,7 +58,7 @@ func main() {
 					res += dct(float64(x), float64(y), float64(i), float64(j), float64(len(in)), float64(len(in[0]))) * in[i][j]
 				}
 			}
-			dcta[i][j] = res * alpha(float64(i)) * alpha(float64(j)) / 4.0
+			dcta[i][j] = res * alpha(float64(i)) * alpha(float64(j))
 		}
 	}
 	fmt.Println(dcta)
