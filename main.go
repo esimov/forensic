@@ -49,16 +49,16 @@ func main() {
 		}
 	}
 	var res float64
-	for i := 0; i < len(in); i++ {
-		dcta[i] = make([]float64, len(in[0]))
-		for j := 0; j < len(in[0]); j++ {
+	for u := 0; u < len(in); u++ {
+		dcta[u] = make([]float64, len(in[0]))
+		for v := 0; v < len(in[0]); v++ {
 			for x := 0; x < len(in); x++ {
 				for y := 0; y < len(in[0]); y++ {
 					//fmt.Println(in[y][x])
-					res += dct(float64(x), float64(y), float64(i), float64(j), float64(len(in)), float64(len(in[0]))) * in[i][j]
+					res += dct(float64(u), float64(v), float64(x), float64(y), float64(len(in)), float64(len(in[0]))) * in[x][y]
 				}
 			}
-			dcta[i][j] = res * alpha(float64(i)) * alpha(float64(j))
+			dcta[u][v] = res * alpha(float64(u)) * alpha(float64(v))
 		}
 	}
 	fmt.Println(dcta)
@@ -66,21 +66,17 @@ func main() {
 	for x := 0; x < len(in); x++ {
 		idcta[x] = make([]float64, len(in[0]))
 		for y := 0; y < len(in[0]); y++ {
-			for i := 0; i < len(in); i++ {
-				for j := 0; j < len(in[0]); j++ {
+			for u := 0; u < len(in); u++ {
+				for v := 0; v < len(in[0]); v++ {
 					//fmt.Println(in[y][x])
-					res += idct(float64(x), float64(y), float64(i), float64(j), float64(len(in)), float64(len(in[0]))) * dcta[x][y]
+					res += idct(float64(u), float64(v), float64(x), float64(y), float64(len(in)), float64(len(in[0]))) * dcta[u][v]
 				}
 			}
-			idcta[x][y] = res
+			idcta[x][y] = res * (1.0/8.0 + 1.0/1.0)
 		}
 	}
 	fmt.Println(idcta)
-
 	os.Exit(2)
-
-
-
 
 	newImg := image.NewRGBA(img.Bounds())
 	dx, dy := img.Bounds().Max.X, img.Bounds().Max.Y
@@ -88,20 +84,20 @@ func main() {
 
 	dctPixels := make(dctPx, dx*dy)
 
-	for i := 0; i < dx; i++ {
-		dctPixels[i] = make([]pixel, dy)
-		for j := 0; j < dy; j++ {
-			r, g, b, _ := img.At(i, j).RGBA()
-			y, u, v := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+	for u := 0; u < dx; u++ {
+		dctPixels[u] = make([]pixel, dy)
+		for v := 0; v < dy; v++ {
+			r, g, b, _ := img.At(u, v).RGBA()
+			y, uc, vc := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
 			for x := 0; x < bdx; x++ {
 				for y := 0; y < bdy; y++ {
 					r, g, b, _ := img.At(x, y).RGBA()
 					yc, _, _ := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
 
-					br += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(r)
-					bg += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(g)
-					bb += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(b)
-					by += dct(float64(x), float64(y), float64(i), float64(j), float64(dx), float64(dy)) * float64(yc)
+					br += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(r)
+					bg += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(g)
+					bb += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(b)
+					by += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(yc)
 				}
 			}
 			// normalization
@@ -113,14 +109,14 @@ func main() {
 				}
 			}
 
-			fi, fj := float64(i), float64(j)
+			fi, fj := float64(u), float64(v)
 			br *= alpha(fi) * alpha(fj)
 			bg *= alpha(fi) * alpha(fj)
 			bb *= alpha(fi) * alpha(fj)
 			by *= alpha(fi) * alpha(fj)
 
-			dctPixels[i][j] = pixel{uint8(br), uint8(bg), uint8(bb), uint8(by)}
-			newImg.Set(i, j, color.RGBA{uint8(y), uint8(u), uint8(v), 255})
+			dctPixels[u][v] = pixel{uint8(br), uint8(bg), uint8(bb), uint8(by)}
+			newImg.Set(u, v, color.RGBA{uint8(y), uint8(uc), uint8(vc), 255})
 		}
 	}
 	fmt.Println(dctPixels)
@@ -168,17 +164,16 @@ func dct(x, y, u, v, w, h float64) float64 {
 	return a * b
 }
 
-func idct(x, y, u, v, w, h float64) float64 {
+func idct(u, v, x, y, w, h float64) float64 {
 	// normalization
 	alpha := func(a float64) float64 {
 		if a == 0 {
-			return math.Sqrt(1.0 / w)
-		} else {
-			return math.Sqrt(2.0 / h)
+			return 1.0 / math.Sqrt(2.0)
 		}
+		return 1.0
 	}
 
-	return dct(x, y, u, v, w, h) * alpha(u) * alpha(v)
+	return dct(u, v, x, y, w, h) * alpha(u) * alpha(v)
 }
 
 // max returns the biggest value between two numbers.
