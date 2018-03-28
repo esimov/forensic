@@ -7,20 +7,25 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
+	"image/draw"
 	"math"
 	"os"
 )
 
 func main() {
-	const BlockSize int = 16
+	const BlockSize int = 8
 
 	type pixel struct {
-		r, g, b, y uint8
+		r, g, b, y float64
 	}
+
 	type dctPx [][]pixel
 
+	type feature []dctPx
+
 	var (
-		br, bg, bb, by float64
+		//features [][]float64
+		cr, cg, cb, cy float64
 	)
 
 	input, err := os.Open("test.jpg")
@@ -75,29 +80,99 @@ func main() {
 			idcta[x][y] = res * (1.0/8.0 + 1.0/1.0)
 		}
 	}
-	fmt.Println(idcta)
-	os.Exit(2)
+	//fmt.Println(idcta)
+	//os.Exit(2)
 
-	newImg := image.NewRGBA(img.Bounds())
-	dx, dy := img.Bounds().Max.X, img.Bounds().Max.Y
+	// Convert image to YUV color space
+	yuv := convertRGBImageToYUV(img)
+	newImg := image.NewRGBA(yuv.Bounds())
+	draw.Draw(newImg, image.Rect(0, 0, yuv.Bounds().Dx(), yuv.Bounds().Dy()), yuv, image.ZP, draw.Src)
+
+	dx, dy := yuv.Bounds().Max.X, yuv.Bounds().Max.Y
 	bdx, bdy := (dx - BlockSize + 1), (dy - BlockSize + 1)
 
-	dctPixels := make(dctPx, dx*dy)
+	var blocks []image.Image
+	for i := 0; i < bdx; i++ {
+		for j := 0; j < bdy; j++ {
+			r := image.Rect(i, j, i+BlockSize, j+BlockSize)
+			block := newImg.SubImage(r).(*image.RGBA)
+			blocks = append(blocks, block)
+			draw.Draw(newImg, image.Rect(0, 0, yuv.Bounds().Max.X, yuv.Bounds().Max.Y), block, image.ZP, draw.Src)
+		}
+	}
 
-	for u := 0; u < dx; u++ {
-		dctPixels[u] = make([]pixel, dy)
-		for v := 0; v < dy; v++ {
-			r, g, b, _ := img.At(u, v).RGBA()
-			y, uc, vc := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
-			for x := 0; x < bdx; x++ {
-				for y := 0; y < bdy; y++ {
-					r, g, b, _ := img.At(x, y).RGBA()
+	fmt.Printf("Len: %d", len(blocks))
+
+	out, err := os.Create("output.png")
+	if err != nil {
+		fmt.Printf("Error creating output file: %v", err)
+	}
+
+	if err := png.Encode(out, newImg); err != nil {
+		fmt.Printf("Error encoding image file: %v", err)
+	}
+
+	for _, block := range blocks {
+		b := block.(*image.RGBA)
+		i0 := b.PixOffset(b.Bounds().Min.X, b.Bounds().Min.Y)
+		i1 := i0 + b.Bounds().Dx()*4
+
+		for u := 0; u < BlockSize; u++ {
+			for v := 0; v < BlockSize; v++ {
+				for i := i0; i < i1; i += 4 {
+					// Get the YUV converted image pixels
+					yc, uc, vc, _ := b.Pix[i+0], b.Pix[i+2], b.Pix[i+2], b.Pix[i+3]
+					// Convert YUV to RGB and obtain the R value
+					r, g, b := color.YCbCrToRGB(yc, uc, vc)
+
+					for x := 0; x < BlockSize; x++ {
+						for y := 0; y < BlockSize; y++ {
+							// Compute Discrete Cosine coefficients
+							cr += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(r)
+							cg += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(g)
+							cb += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(b)
+							cy += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(yc)
+						}
+					}
+				}
+
+				// normalization
+				alpha := func(a float64) float64 {
+					if a == 0 {
+						return math.Sqrt(1.0 / float64(dx))
+					} else {
+						return math.Sqrt(2.0 / float64(dy))
+					}
+				}
+
+				fi, fj := float64(u), float64(v)
+				cr *= alpha(fi) * alpha(fj)
+				cg *= alpha(fi) * alpha(fj)
+				cb *= alpha(fi) * alpha(fj)
+				cy *= alpha(fi) * alpha(fj)
+			}
+		}
+	}
+
+	os.Exit(2)
+
+	dctPixels := make(dctPx, bdx*bdy)
+	for x := 0; x < bdx; x++ {
+		dctPixels[x] = make([]pixel, bdy)
+		for y := 0; y < bdy; y++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			yc, uc, vc := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+
+			for i := 0; i < BlockSize-1; i++ {
+				for j := 0; j < BlockSize-1; j++ {
+					r, g, b, _ := img.At(x + i, y + j).RGBA()
 					yc, _, _ := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
 
-					br += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(r)
-					bg += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(g)
-					bb += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(b)
-					by += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(yc)
+					// Compute Discrete Cosine coefficients
+					cr += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(r)
+					cg += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(g)
+					cb += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(b)
+					cy += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(yc)
 				}
 			}
 			// normalization
@@ -109,17 +184,24 @@ func main() {
 				}
 			}
 
-			fi, fj := float64(u), float64(v)
-			br *= alpha(fi) * alpha(fj)
-			bg *= alpha(fi) * alpha(fj)
-			bb *= alpha(fi) * alpha(fj)
-			by *= alpha(fi) * alpha(fj)
+			fi, fj := float64(x), float64(y)
+			cr *= alpha(fi) * alpha(fj)
+			cg *= alpha(fi) * alpha(fj)
+			cb *= alpha(fi) * alpha(fj)
+			cy *= alpha(fi) * alpha(fj)
 
-			dctPixels[u][v] = pixel{uint8(br), uint8(bg), uint8(bb), uint8(by)}
-			newImg.Set(u, v, color.RGBA{uint8(y), uint8(uc), uint8(vc), 255})
+			dctPixels[x][y] = pixel{cr, cg, cb, cy}
+			newImg.Set(x, y, color.RGBA{uint8(yc), uint8(uc), uint8(vc), 255})
 		}
 	}
-	fmt.Println(dctPixels)
+	fmt.Println(len(dctPixels))
+
+	// Extract features
+	for x := 0; x < bdx; x++ {
+		for y := 0; y < bdy; y++ {
+			//fmt.Println(dctPixels[x][y].y)
+		}
+	}
 
 	output, err := os.Create("output.png")
 	if err != nil {
@@ -129,6 +211,21 @@ func main() {
 	if err := png.Encode(output, newImg); err != nil {
 		fmt.Printf("Error encoding image file: %v", err)
 	}
+}
+
+func convertRGBImageToYUV(img image.Image) image.Image {
+	bounds := img.Bounds()
+	dx, dy := bounds.Max.X, bounds.Max.Y
+
+	yuvImage := image.NewRGBA(bounds)
+	for x := 0; x < dx; x++ {
+		for y := 0; y < dy; y++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			yc, uc, vc := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
+			yuvImage.Set(x, y, color.RGBA{uint8(yc), uint8(uc), uint8(vc), 255})
+		}
+	}
+	return yuvImage
 }
 
 func RGBtoYUV(r, g, b uint32) (uint32, uint32, uint32) {
