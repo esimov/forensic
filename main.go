@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	const BlockSize int = 4
+	const BlockSize int = 8
 
 	type pixel struct {
 		r, g, b, y float64
@@ -37,51 +37,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error decoding the image: %v", err)
 	}
-
-	//-------------------------------//
-	// Test DCT <=> IDCT conversion
-
-	in := [][]float64{
-		{0, 1, 2, 3, 4, 5, 6, 7},
-	};
-	dcta := make([][]float64, len(in))
-
-	alpha := func(a float64) float64 {
-		if a == 0 {
-			return math.Sqrt(1.0 / 8)
-		} else {
-			return math.Sqrt(2.0 / 8)
-		}
-	}
-	var res float64
-	for u := 0; u < len(in); u++ {
-		dcta[u] = make([]float64, len(in[0]))
-		for v := 0; v < len(in[0]); v++ {
-			for x := 0; x < len(in); x++ {
-				for y := 0; y < len(in[0]); y++ {
-					//fmt.Println(in[y][x])
-					res += dct(float64(u), float64(v), float64(x), float64(y), float64(len(in[0]))) * in[x][y]
-				}
-			}
-			dcta[u][v] = res * alpha(float64(u)) * alpha(float64(v))
-		}
-	}
-	fmt.Println(dcta)
-	idcta := make([][]float64, len(in))
-	for x := 0; x < len(in); x++ {
-		idcta[x] = make([]float64, len(in[0]))
-		for y := 0; y < len(in[0]); y++ {
-			for u := 0; u < len(in); u++ {
-				for v := 0; v < len(in[0]); v++ {
-					//fmt.Println(in[y][x])
-					res += idct(float64(u), float64(v), float64(x), float64(y), float64(len(in[0]))) * dcta[u][v]
-				}
-			}
-			idcta[x][y] = res * (1.0/8.0 + 1.0/1.0)
-		}
-	}
-	//fmt.Println(idcta)
-	//os.Exit(2)
 
 	start := time.Now()
 
@@ -269,10 +224,6 @@ func idct(u, v, x, y, w float64) float64 {
 	}
 
 	return dct(u, v, x, y, w) * alpha(u) * alpha(v)
-}
-
-func average(r, g, b uint8) {
-
 }
 
 func RGBtoYUV(r, g, b uint32) (uint32, uint32, uint32) {
