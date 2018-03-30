@@ -10,10 +10,11 @@ import (
 	"image/draw"
 	"math"
 	"os"
+	"time"
 )
 
 func main() {
-	const BlockSize int = 8
+	const BlockSize int = 4
 
 	type pixel struct {
 		r, g, b, y float64
@@ -21,10 +22,8 @@ func main() {
 
 	type dctPx [][]pixel
 
-	type feature []dctPx
-
 	var (
-		//features [][]float64
+		features []float64
 		cr, cg, cb, cy float64
 	)
 
@@ -39,7 +38,8 @@ func main() {
 		fmt.Printf("Error decoding the image: %v", err)
 	}
 
-
+	//-------------------------------//
+	// Test DCT <=> IDCT conversion
 
 	in := [][]float64{
 		{0, 1, 2, 3, 4, 5, 6, 7},
@@ -60,7 +60,7 @@ func main() {
 			for x := 0; x < len(in); x++ {
 				for y := 0; y < len(in[0]); y++ {
 					//fmt.Println(in[y][x])
-					res += dct(float64(u), float64(v), float64(x), float64(y), float64(len(in)), float64(len(in[0]))) * in[x][y]
+					res += dct(float64(u), float64(v), float64(x), float64(y), float64(len(in[0]))) * in[x][y]
 				}
 			}
 			dcta[u][v] = res * alpha(float64(u)) * alpha(float64(v))
@@ -74,7 +74,7 @@ func main() {
 			for u := 0; u < len(in); u++ {
 				for v := 0; v < len(in[0]); v++ {
 					//fmt.Println(in[y][x])
-					res += idct(float64(u), float64(v), float64(x), float64(y), float64(len(in)), float64(len(in[0]))) * dcta[u][v]
+					res += idct(float64(u), float64(v), float64(x), float64(y), float64(len(in[0]))) * dcta[u][v]
 				}
 			}
 			idcta[x][y] = res * (1.0/8.0 + 1.0/1.0)
@@ -82,6 +82,8 @@ func main() {
 	}
 	//fmt.Println(idcta)
 	//os.Exit(2)
+
+	start := time.Now()
 
 	// Convert image to YUV color space
 	yuv := convertRGBImageToYUV(img)
@@ -112,12 +114,17 @@ func main() {
 		fmt.Printf("Error encoding image file: %v", err)
 	}
 
+	// Average Red, Green and Blue
+	var avr, avg, avb float64
+
 	for _, block := range blocks {
 		b := block.(*image.RGBA)
 		i0 := b.PixOffset(b.Bounds().Min.X, b.Bounds().Min.Y)
 		i1 := i0 + b.Bounds().Dx()*4
 
+		dctPixels := make(dctPx, BlockSize*BlockSize)
 		for u := 0; u < BlockSize; u++ {
+			dctPixels[u] = make([]pixel, BlockSize)
 			for v := 0; v < BlockSize; v++ {
 				for i := i0; i < i1; i += 4 {
 					// Get the YUV converted image pixels
@@ -128,10 +135,14 @@ func main() {
 					for x := 0; x < BlockSize; x++ {
 						for y := 0; y < BlockSize; y++ {
 							// Compute Discrete Cosine coefficients
-							cr += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(r)
-							cg += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(g)
-							cb += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(b)
-							cy += dct(float64(x), float64(y), float64(u), float64(v), float64(dx), float64(dy)) * float64(yc)
+							cr += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(r)
+							cg += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(g)
+							cb += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(b)
+							cy += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(yc)
+
+							avr += float64(r)
+							avg += float64(g)
+							avb += float64(b)
 						}
 					}
 				}
@@ -150,13 +161,33 @@ func main() {
 				cg *= alpha(fi) * alpha(fj)
 				cb *= alpha(fi) * alpha(fj)
 				cy *= alpha(fi) * alpha(fj)
+
+				dctPixels[u][v] = pixel{cr, cg, cb, cy}
 			}
 		}
+		avr /= float64(BlockSize*BlockSize)
+		avg /= float64(BlockSize*BlockSize)
+		avb /= float64(BlockSize*BlockSize)
+
+		features = append(features, dctPixels[0][0].y)
+		features = append(features, dctPixels[0][1].y)
+		features = append(features, dctPixels[1][0].y)
+		features = append(features, dctPixels[0][0].r)
+		features = append(features, dctPixels[0][0].g)
+		features = append(features, dctPixels[0][0].b)
+
+		// Append average red, green and blue values
+		features = append(features, avr)
+		features = append(features, avb)
+		features = append(features, avg)
 	}
 
+	fmt.Println(features)
+
+	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
 	os.Exit(2)
 
-	dctPixels := make(dctPx, bdx*bdy)
+	/*dctPixels := make(dctPx, bdx*bdy)
 	for x := 0; x < bdx; x++ {
 		dctPixels[x] = make([]pixel, bdy)
 		for y := 0; y < bdy; y++ {
@@ -196,13 +227,6 @@ func main() {
 	}
 	fmt.Println(len(dctPixels))
 
-	// Extract features
-	for x := 0; x < bdx; x++ {
-		for y := 0; y < bdy; y++ {
-			//fmt.Println(dctPixels[x][y].y)
-		}
-	}
-
 	output, err := os.Create("output.png")
 	if err != nil {
 		fmt.Printf("Error creating output file: %v", err)
@@ -210,7 +234,7 @@ func main() {
 
 	if err := png.Encode(output, newImg); err != nil {
 		fmt.Printf("Error encoding image file: %v", err)
-	}
+	}*/
 }
 
 func convertRGBImageToYUV(img image.Image) image.Image {
@@ -226,6 +250,29 @@ func convertRGBImageToYUV(img image.Image) image.Image {
 		}
 	}
 	return yuvImage
+}
+
+func dct(x, y, u, v, w float64) float64 {
+	a := math.Cos(((2.0*x+1)*(u*math.Pi))/(2*w))
+	b := math.Cos(((2.0*y+1)*(v*math.Pi))/(2*w))
+
+	return a * b
+}
+
+func idct(u, v, x, y, w float64) float64 {
+	// normalization
+	alpha := func(a float64) float64 {
+		if a == 0 {
+			return 1.0 / math.Sqrt(2.0)
+		}
+		return 1.0
+	}
+
+	return dct(u, v, x, y, w) * alpha(u) * alpha(v)
+}
+
+func average(r, g, b uint8) {
+
 }
 
 func RGBtoYUV(r, g, b uint32) (uint32, uint32, uint32) {
@@ -252,25 +299,6 @@ func clamp255(x float64) uint8 {
 		return 255
 	}
 	return uint8(x)
-}
-
-func dct(x, y, u, v, w, h float64) float64 {
-	a := math.Cos(((2.0*x+1)*(u*math.Pi))/(2*w))
-	b := math.Cos(((2.0*y+1)*(v*math.Pi))/(2*h))
-
-	return a * b
-}
-
-func idct(u, v, x, y, w, h float64) float64 {
-	// normalization
-	alpha := func(a float64) float64 {
-		if a == 0 {
-			return 1.0 / math.Sqrt(2.0)
-		}
-		return 1.0
-	}
-
-	return dct(u, v, x, y, w, h) * alpha(u) * alpha(v)
 }
 
 // max returns the biggest value between two numbers.
