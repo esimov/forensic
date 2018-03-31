@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
-	"image/draw"
 	"math"
 	"os"
 	"time"
@@ -23,7 +23,7 @@ func main() {
 	type dctPx [][]pixel
 
 	var (
-		features []float64
+		features       []float64
 		cr, cg, cb, cy float64
 	)
 
@@ -94,21 +94,20 @@ func main() {
 							cg += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(g)
 							cb += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(b)
 							cy += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(yc)
-
-							avr += float64(r)
-							avg += float64(g)
-							avb += float64(b)
 						}
 					}
+					// Compute the average of R,G,B.
+					avr += float64(r)
+					avg += float64(g)
+					avb += float64(b)
 				}
 
 				// normalization
 				alpha := func(a float64) float64 {
 					if a == 0 {
 						return math.Sqrt(1.0 / float64(dx))
-					} else {
-						return math.Sqrt(2.0 / float64(dy))
 					}
+					return math.Sqrt(2.0 / float64(dy))
 				}
 
 				fi, fj := float64(u), float64(v)
@@ -120,9 +119,9 @@ func main() {
 				dctPixels[u][v] = pixel{cr, cg, cb, cy}
 			}
 		}
-		avr /= float64(BlockSize*BlockSize)
-		avg /= float64(BlockSize*BlockSize)
-		avb /= float64(BlockSize*BlockSize)
+		avr /= float64(BlockSize * BlockSize)
+		avg /= float64(BlockSize * BlockSize)
+		avb /= float64(BlockSize * BlockSize)
 
 		features = append(features, dctPixels[0][0].y)
 		features = append(features, dctPixels[0][1].y)
@@ -208,8 +207,8 @@ func convertRGBImageToYUV(img image.Image) image.Image {
 }
 
 func dct(x, y, u, v, w float64) float64 {
-	a := math.Cos(((2.0*x+1)*(u*math.Pi))/(2*w))
-	b := math.Cos(((2.0*y+1)*(v*math.Pi))/(2*w))
+	a := math.Cos(((2.0*x + 1) * (u * math.Pi)) / (2 * w))
+	b := math.Cos(((2.0*y + 1) * (v * math.Pi)) / (2 * w))
 
 	return a * b
 }
