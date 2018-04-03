@@ -11,22 +11,35 @@ import (
 	"math"
 	"os"
 	"time"
+	"go4.org/sort"
+)
+
+const BlockSize int = 4
+
+type pixel struct {
+	r, g, b, y float64
+}
+
+type dctPx [][]pixel
+
+type imageBlock struct {
+	x int
+	y int
+	img image.Image
+}
+
+type feature struct {
+	x int
+	y int
+	v float64
+}
+
+var (
+	features []feature
+	cr, cg, cb, cy float64
 )
 
 func main() {
-	const BlockSize int = 8
-
-	type pixel struct {
-		r, g, b, y float64
-	}
-
-	type dctPx [][]pixel
-
-	var (
-		features []float64
-		cr, cg, cb, cy float64
-	)
-
 	input, err := os.Open("test.jpg")
 	defer input.Close()
 
@@ -48,12 +61,12 @@ func main() {
 	dx, dy := yuv.Bounds().Max.X, yuv.Bounds().Max.Y
 	bdx, bdy := (dx - BlockSize + 1), (dy - BlockSize + 1)
 
-	var blocks []image.Image
+	var blocks []imageBlock
 	for i := 0; i < bdx; i++ {
 		for j := 0; j < bdy; j++ {
 			r := image.Rect(i, j, i+BlockSize, j+BlockSize)
 			block := newImg.SubImage(r).(*image.RGBA)
-			blocks = append(blocks, block)
+			blocks = append(blocks, imageBlock{x: i, y: j, img: block})
 			draw.Draw(newImg, image.Rect(0, 0, yuv.Bounds().Max.X, yuv.Bounds().Max.Y), block, image.ZP, draw.Src)
 		}
 	}
@@ -73,7 +86,7 @@ func main() {
 	var avr, avg, avb float64
 
 	for _, block := range blocks {
-		b := block.(*image.RGBA)
+		b := block.img.(*image.RGBA)
 		i0 := b.PixOffset(b.Bounds().Min.X, b.Bounds().Min.Y)
 		i1 := i0 + b.Bounds().Dx()*4
 
@@ -124,20 +137,32 @@ func main() {
 		avg /= float64(BlockSize*BlockSize)
 		avb /= float64(BlockSize*BlockSize)
 
-		features = append(features, dctPixels[0][0].y)
-		features = append(features, dctPixels[0][1].y)
-		features = append(features, dctPixels[1][0].y)
-		features = append(features, dctPixels[0][0].r)
-		features = append(features, dctPixels[0][0].g)
-		features = append(features, dctPixels[0][0].b)
+		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].y})
+		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][1].y})
+		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[1][0].y})
+		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].r})
+		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].g})
+		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].b})
 
 		// Append average red, green and blue values
-		features = append(features, avr)
-		features = append(features, avb)
-		features = append(features, avg)
+		features = append(features, feature{x: block.x, y: block.y, v: avr})
+		features = append(features, feature{x: block.x, y: block.y, v: avb})
+		features = append(features, feature{x: block.x, y: block.y, v: avg})
 	}
 
+	// Lexicographically sort the feature vectors
+	sort.Slice(features, func(i, j int) bool {
+		if features[i].v < features[j].v {
+			return true
+		}
+		if features[i].v > features[j].v {
+			return false
+		}
+		return features[i].v < features[j].v
+	})
 	fmt.Println(features)
+
+	fmt.Printf("Features length: %d", len(features))
 
 	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
 	os.Exit(2)
