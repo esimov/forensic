@@ -29,9 +29,9 @@ type imageBlock struct {
 }
 
 type feature struct {
-	x int
-	y int
-	v float64
+	x   int
+	y   int
+	val float64
 }
 
 var (
@@ -137,28 +137,28 @@ func main() {
 		avg /= float64(BlockSize*BlockSize)
 		avb /= float64(BlockSize*BlockSize)
 
-		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].y})
-		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][1].y})
-		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[1][0].y})
-		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].r})
-		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].g})
-		features = append(features, feature{x: block.x, y: block.y, v: dctPixels[0][0].b})
+		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].y})
+		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][1].y})
+		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[1][0].y})
+		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].r})
+		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].g})
+		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].b})
 
 		// Append average red, green and blue values
-		features = append(features, feature{x: block.x, y: block.y, v: avr})
-		features = append(features, feature{x: block.x, y: block.y, v: avb})
-		features = append(features, feature{x: block.x, y: block.y, v: avg})
+		features = append(features, feature{x: block.x, y: block.y, val: avr})
+		features = append(features, feature{x: block.x, y: block.y, val: avb})
+		features = append(features, feature{x: block.x, y: block.y, val: avg})
 	}
 
 	// Lexicographically sort the feature vectors
 	sort.Slice(features, func(i, j int) bool {
-		if features[i].v < features[j].v {
+		if features[i].val < features[j].val {
 			return true
 		}
-		if features[i].v > features[j].v {
+		if features[i].val > features[j].val {
 			return false
 		}
-		return features[i].v < features[j].v
+		return features[i].val < features[j].val
 	})
 	fmt.Println(features)
 
