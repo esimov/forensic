@@ -15,6 +15,7 @@ import (
 )
 
 const BlockSize int = 4
+const Threshold = 10
 
 type pixel struct {
 	r, g, b, y float64
@@ -151,70 +152,17 @@ func main() {
 	}
 
 	// Lexicographically sort the feature vectors
-	sort.Slice(features, func(i, j int) bool {
-		if features[i].val < features[j].val {
-			return true
-		}
-		if features[i].val > features[j].val {
-			return false
-		}
-		return features[i].val < features[j].val
-	})
-	fmt.Println(features)
+	sort.Sort(featVec(features))
 
+	for i := 0; i < len(features)-1; i++ {
+		blockA, blockB := features[i], features[i+1]
+		res := analyze(blockA, blockB)
+		fmt.Println(res)
+	}
+	//fmt.Println(features)
 	fmt.Printf("Features length: %d", len(features))
 
 	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
-	os.Exit(2)
-
-	/*dctPixels := make(dctPx, bdx*bdy)
-	for x := 0; x < bdx; x++ {
-		dctPixels[x] = make([]pixel, bdy)
-		for y := 0; y < bdy; y++ {
-			r, g, b, _ := img.At(x, y).RGBA()
-			yc, uc, vc := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
-
-			for i := 0; i < BlockSize-1; i++ {
-				for j := 0; j < BlockSize-1; j++ {
-					r, g, b, _ := img.At(x + i, y + j).RGBA()
-					yc, _, _ := color.RGBToYCbCr(uint8(r>>8), uint8(g>>8), uint8(b>>8))
-
-					// Compute Discrete Cosine coefficients
-					cr += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(r)
-					cg += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(g)
-					cb += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(b)
-					cy += dct(float64(i), float64(j), float64(x), float64(y), float64(dx), float64(dy)) * float64(yc)
-				}
-			}
-			// normalization
-			alpha := func(a float64) float64 {
-				if a == 0 {
-					return math.Sqrt(1.0 / float64(dx))
-				} else {
-					return math.Sqrt(2.0 / float64(dy))
-				}
-			}
-
-			fi, fj := float64(x), float64(y)
-			cr *= alpha(fi) * alpha(fj)
-			cg *= alpha(fi) * alpha(fj)
-			cb *= alpha(fi) * alpha(fj)
-			cy *= alpha(fi) * alpha(fj)
-
-			dctPixels[x][y] = pixel{cr, cg, cb, cy}
-			newImg.Set(x, y, color.RGBA{uint8(yc), uint8(uc), uint8(vc), 255})
-		}
-	}
-	fmt.Println(len(dctPixels))
-
-	output, err := os.Create("output.png")
-	if err != nil {
-		fmt.Printf("Error creating output file: %v", err)
-	}
-
-	if err := png.Encode(output, newImg); err != nil {
-		fmt.Printf("Error encoding image file: %v", err)
-	}*/
 }
 
 func convertRGBImageToYUV(img image.Image) image.Image {
@@ -283,4 +231,32 @@ func max(x, y int) float64 {
 		return float64(x)
 	}
 	return float64(y)
+}
+
+// Check weather two neighboring blocks are considered almost identical.
+func analyze(blockA, blockB feature) float64 {
+	// Compute the euclidean distance between two neighboring blocks.
+	dx := float64(blockA.x) - float64(blockB.x)
+	dy := float64(blockA.y) - float64(blockB.y)
+	dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
+
+	if dist < Threshold {
+		return dist
+	}
+	return 0
+}
+
+// Implement sorting function on feature vector
+type featVec []feature
+
+func (a featVec) Len() int           { return len(a) }
+func (a featVec) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a featVec) Less(i, j int) bool {
+	if a[i].val < a[j].val {
+		return true
+	}
+	if a[i].val > a[j].val {
+		return false
+	}
+	return a[i].val < a[j].val
 }
