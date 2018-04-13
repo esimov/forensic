@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
-	"image/draw"
 	"math"
 	"os"
 	"time"
+
 	"go4.org/sort"
 )
 
@@ -25,14 +26,14 @@ type pixel struct {
 type dctPx [][]pixel
 
 type imageBlock struct {
-	x int
-	y int
+	x   int
+	y   int
 	img image.Image
 }
 
 type vector struct {
-	xa, ya int
-	xb, yb int
+	xa, ya           int
+	xb, yb           int
 	offsetX, offsetY int
 }
 
@@ -43,8 +44,8 @@ type feature struct {
 }
 
 var (
-	features []feature
-	vectors  []vector
+	features       []feature
+	vectors        []vector
 	cr, cg, cb, cy float64
 )
 
@@ -142,9 +143,9 @@ func main() {
 				dctPixels[u][v] = pixel{cr, cg, cb, cy}
 			}
 		}
-		avr /= float64(BlockSize*BlockSize)
-		avg /= float64(BlockSize*BlockSize)
-		avb /= float64(BlockSize*BlockSize)
+		avr /= float64(BlockSize * BlockSize)
+		avg /= float64(BlockSize * BlockSize)
+		avb /= float64(BlockSize * BlockSize)
 
 		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].y})
 		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][1].y})
@@ -195,8 +196,8 @@ func convertRGBImageToYUV(img image.Image) image.Image {
 }
 
 func dct(x, y, u, v, w float64) float64 {
-	a := math.Cos(((2.0*x+1)*(u*math.Pi))/(2*w))
-	b := math.Cos(((2.0*y+1)*(v*math.Pi))/(2*w))
+	a := math.Cos(((2.0*x + 1) * (u * math.Pi)) / (2 * w))
+	b := math.Cos(((2.0*y + 1) * (v * math.Pi)) / (2 * w))
 
 	return a * b
 }
@@ -255,10 +256,10 @@ func analyze(blockA, blockB feature) *vector {
 	dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
 
 	res := &vector{
-		xa: blockA.x,
-		ya: blockA.y,
-		xb: blockB.x,
-		yb: blockB.y,
+		xa:      blockA.x,
+		ya:      blockA.y,
+		xb:      blockB.x,
+		yb:      blockB.y,
 		offsetX: int(dx),
 		offsetY: int(dy),
 	}
@@ -274,7 +275,7 @@ type offset struct {
 type newVector []vector
 
 // Analyze pair of candidate and check for similarity by computing the accumulative number of shift vectors.
-func checkForSimilarity(vect []vector)newVector {
+func checkForSimilarity(vect []vector) newVector {
 	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
 	duplicateItems := make(map[offset]int)
 
@@ -298,8 +299,8 @@ func checkForSimilarity(vect []vector)newVector {
 // Implement sorting function on feature vector
 type featVec []feature
 
-func (a featVec) Len() int           { return len(a) }
-func (a featVec) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a featVec) Len() int      { return len(a) }
+func (a featVec) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a featVec) Less(i, j int) bool {
 	if a[i].val < a[j].val {
 		return true
