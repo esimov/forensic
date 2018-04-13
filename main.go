@@ -15,7 +15,8 @@ import (
 )
 
 const BlockSize int = 4
-const Threshold = 10
+const MagnitudeThreshold = 20
+const FrequencyThreshold = 6
 
 type pixel struct {
 	r, g, b, y float64
@@ -29,6 +30,12 @@ type imageBlock struct {
 	img image.Image
 }
 
+type vector struct {
+	xa, ya int
+	xb, yb int
+	offsetX, offsetY int
+}
+
 type feature struct {
 	x   int
 	y   int
@@ -37,6 +44,7 @@ type feature struct {
 
 var (
 	features []feature
+	vectors  []vector
 	cr, cg, cb, cy float64
 )
 
@@ -156,9 +164,15 @@ func main() {
 
 	for i := 0; i < len(features)-1; i++ {
 		blockA, blockB := features[i], features[i+1]
-		res := analyze(blockA, blockB)
-		fmt.Println(res)
+		result := analyze(blockA, blockB)
+
+		if result != nil {
+			vectors = append(vectors, *result)
+		}
 	}
+	res := checkForSimilarity(vectors)
+	fmt.Println(res)
+
 	//fmt.Println(features)
 	fmt.Printf("Features length: %d", len(features))
 
@@ -234,16 +248,51 @@ func max(x, y int) float64 {
 }
 
 // Check weather two neighboring blocks are considered almost identical.
-func analyze(blockA, blockB feature) float64 {
+func analyze(blockA, blockB feature) *vector {
 	// Compute the euclidean distance between two neighboring blocks.
 	dx := float64(blockA.x) - float64(blockB.x)
 	dy := float64(blockA.y) - float64(blockB.y)
 	dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
 
-	if dist < Threshold {
-		return dist
+	res := &vector{
+		xa: blockA.x,
+		ya: blockA.y,
+		xb: blockB.x,
+		yb: blockB.y,
+		offsetX: int(dx),
+		offsetY: int(dy),
 	}
-	return 0
+	if dist < MagnitudeThreshold {
+		return res
+	}
+	return nil
+}
+
+type offset struct {
+	x, y int
+}
+type newVector []vector
+
+// Analyze pair of candidate and check for similarity by computing the accumulative number of shift vectors.
+func checkForSimilarity(vect []vector)newVector {
+	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
+	duplicateItems := make(map[offset]int)
+
+	for _, v := range vect {
+		// Check if the element exist in the duplicateItems map.
+		offsetX := v.offsetX
+		offsetY := v.offsetY
+		offset := &offset{offsetX, offsetY}
+
+		_, exists := duplicateItems[*offset]
+		if exists {
+			duplicateItems[*offset]++
+		} else {
+			duplicateItems[*offset] = 1
+		}
+	}
+	fmt.Println(duplicateItems)
+	return nil
 }
 
 // Implement sorting function on feature vector
@@ -259,4 +308,16 @@ func (a featVec) Less(i, j int) bool {
 		return false
 	}
 	return a[i].val < a[j].val
+}
+
+func unique(intSlice []int) []int {
+	keys := make(map[int]bool)
+	list := []int{}
+	for _, entry := range intSlice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }
