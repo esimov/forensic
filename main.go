@@ -14,28 +14,35 @@ import (
 	"time"
 )
 
-const BlockSize int = 4
-const MagnitudeThreshold = 20
-const FrequencyThreshold = 40
+const (
+	BlockSize int = 4
+	MagnitudeThreshold = 0.5
+	SymmetryThreshold = 40
+)
 
+// pixel struct contains the discrete cosine transformation R,G,B,Y values.
 type pixel struct {
 	r, g, b, y float64
 }
 
+// dctPx stores the DCT pixel values.
 type dctPx [][]pixel
 
+// imageBlock contains the generated block upper left position and the stored image.
 type imageBlock struct {
 	x   int
 	y   int
 	img image.Image
 }
 
+// vector struct contains the neighboring blocks top left position and the shift vectors between them.
 type vector struct {
 	xa, ya           int
 	xb, yb           int
 	offsetX, offsetY int
 }
 
+// feature struct contains the feature blocks x, y position and their respective values.
 type feature struct {
 	x   int
 	y   int
@@ -49,7 +56,7 @@ var (
 )
 
 func main() {
-	input, err := os.Open("test.jpg")
+	input, err := os.Open("test2.jpg")
 	defer input.Close()
 
 	if err != nil {
@@ -91,7 +98,7 @@ func main() {
 		fmt.Printf("Error encoding image file: %v", err)
 	}
 
-	// Average Red, Green and Blue
+	// Average RGB value.
 	var avr, avg, avb float64
 
 	for _, block := range blocks {
@@ -153,7 +160,7 @@ func main() {
 		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].g})
 		features = append(features, feature{x: block.x, y: block.y, val: dctPixels[0][0].b})
 
-		// Append average red, green and blue values
+		// Append average R,G,B values to the features vector(slice).
 		features = append(features, feature{x: block.x, y: block.y, val: avr})
 		features = append(features, feature{x: block.x, y: block.y, val: avb})
 		features = append(features, feature{x: block.x, y: block.y, val: avg})
@@ -173,12 +180,12 @@ func main() {
 	res := checkForSimilarity(vectors)
 	fmt.Println(res)
 
-	//fmt.Println(features)
 	fmt.Printf("Features length: %d", len(features))
 
 	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
 }
 
+//convertRGBImageToYUV coverts the image from RGB to YUV color space.
 func convertRGBImageToYUV(img image.Image) image.Image {
 	bounds := img.Bounds()
 	dx, dy := bounds.Max.X, bounds.Max.Y
@@ -194,6 +201,72 @@ func convertRGBImageToYUV(img image.Image) image.Image {
 	return yuvImage
 }
 
+// analyze checks weather two neighboring blocks are considered almost identical.
+func analyze(blockA, blockB feature) *vector {
+	// Compute the euclidean distance between two neighboring blocks.
+	dx := float64(blockA.x) - float64(blockB.x)
+	dy := float64(blockA.y) - float64(blockB.y)
+	dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
+
+	res := &vector{
+		xa:      blockA.x,
+		ya:      blockA.y,
+		xb:      blockB.x,
+		yb:      blockB.y,
+		offsetX: int(math.Abs(dx)),
+		offsetY: int(math.Abs(dy)),
+	}
+
+	if dist < MagnitudeThreshold {
+		return res
+	}
+	return nil
+}
+
+type offset struct {
+	x, y int
+}
+
+type newVector []vector
+
+// checkForSimilarity analyze pair of candidate and check for
+// similarity by computing the accumulative number of shift vectors.
+func checkForSimilarity(vect []vector) newVector {
+	var identicalBlocks newVector
+	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
+	duplicates := make(map[offset]int)
+
+	for _, v := range vect {
+		// Check for duplicate blocks
+		offsetX := v.offsetX
+		offsetY := v.offsetY
+		offset := &offset{offsetX, offsetY}
+
+		_, exists := duplicates[*offset]
+		if exists {
+			duplicates[*offset]++
+		} else {
+			duplicates[*offset] = 1
+		}
+
+		// If the accumulative number of corresponding shift vectors is greater than
+		// a predefined threshold, the corresponding regions are marked as suspicious.
+		if duplicates[*offset] > SymmetryThreshold {
+			identicalBlocks = append(identicalBlocks, vector{
+				v.xa, v.xb, v.ya, v.yb, v.offsetX, v.offsetY,
+			})
+		}
+	}
+	return identicalBlocks
+}
+
+// TODO filter out neighboring blocks.
+func filterOutNeighbors() {
+	
+}
+
+// dct computes the Discrete Cosine Transform.
+// https://en.wikipedia.org/wiki/Discrete_cosine_transform
 func dct(x, y, u, v, w float64) float64 {
 	a := math.Cos(((2.0*x + 1) * (u * math.Pi)) / (2 * w))
 	b := math.Cos(((2.0*y + 1) * (v * math.Pi)) / (2 * w))
@@ -201,6 +274,7 @@ func dct(x, y, u, v, w float64) float64 {
 	return a * b
 }
 
+// idct computes the Inverse Discrete Cosine Transform. (Only for testing purposes.)
 func idct(u, v, x, y, w float64) float64 {
 	// normalization
 	alpha := func(a float64) float64 {
@@ -247,61 +321,17 @@ func max(x, y int) float64 {
 	return float64(y)
 }
 
-// Check weather two neighboring blocks are considered almost identical.
-func analyze(blockA, blockB feature) *vector {
-	// Compute the euclidean distance between two neighboring blocks.
-	dx := float64(blockA.x) - float64(blockB.x)
-	dy := float64(blockA.y) - float64(blockB.y)
-	dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
-
-	res := &vector{
-		xa:      blockA.x,
-		ya:      blockA.y,
-		xb:      blockB.x,
-		yb:      blockB.y,
-		offsetX: int(dx),
-		offsetY: int(dy),
-	}
-	if dist < MagnitudeThreshold {
-		return res
-	}
-	return nil
-}
-
-type offset struct {
-	x, y int
-}
-
-type newVector []vector
-
-// Analyze pair of candidate and check for similarity by computing the accumulative number of shift vectors.
-func checkForSimilarity(vect []vector) newVector {
-	var identicalBlocks newVector
-	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
-	duplicates := make(map[offset]int)
-
-	for _, v := range vect {
-		// Check if the element exist in the duplicateItems map.
-		offsetX := v.offsetX
-		offsetY := v.offsetY
-		offset := &offset{offsetX, offsetY}
-
-		_, exists := duplicates[*offset]
-		if exists {
-			duplicates[*offset]++
-		} else {
-			duplicates[*offset] = 1
-		}
-
-		// If the accumulative number of corresponding shift vectors is greater than
-		// a predefined threshold, the corresponding regions are marked as suspicious.
-		if duplicates[*offset] > FrequencyThreshold {
-			identicalBlocks = append(identicalBlocks, vector{
-				v.xa, v.xb, v.ya, v.yb, v.offsetX, v.offsetY,
-			})
+// unique returns slice's unique values.
+func unique(intSlice []int) []int {
+	keys := make(map[int]bool)
+	list := []int{}
+	for _, entry := range intSlice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
 		}
 	}
-	return identicalBlocks
+	return list
 }
 
 // Implement sorting function on feature vector
@@ -317,16 +347,4 @@ func (a featVec) Less(i, j int) bool {
 		return false
 	}
 	return a[i].val < a[j].val
-}
-
-func unique(intSlice []int) []int {
-	keys := make(map[int]bool)
-	list := []int{}
-	for _, entry := range intSlice {
-		if _, value := keys[entry]; !value {
-			keys[entry] = true
-			list = append(list, entry)
-		}
-	}
-	return list
 }
