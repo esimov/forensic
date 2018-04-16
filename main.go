@@ -10,14 +10,13 @@ import (
 	_ "image/png"
 	"math"
 	"os"
+	"sort"
 	"time"
-
-	"go4.org/sort"
 )
 
 const BlockSize int = 4
 const MagnitudeThreshold = 20
-const FrequencyThreshold = 6
+const FrequencyThreshold = 40
 
 type pixel struct {
 	r, g, b, y float64
@@ -272,12 +271,14 @@ func analyze(blockA, blockB feature) *vector {
 type offset struct {
 	x, y int
 }
+
 type newVector []vector
 
 // Analyze pair of candidate and check for similarity by computing the accumulative number of shift vectors.
 func checkForSimilarity(vect []vector) newVector {
+	var identicalBlocks newVector
 	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
-	duplicateItems := make(map[offset]int)
+	duplicates := make(map[offset]int)
 
 	for _, v := range vect {
 		// Check if the element exist in the duplicateItems map.
@@ -285,15 +286,22 @@ func checkForSimilarity(vect []vector) newVector {
 		offsetY := v.offsetY
 		offset := &offset{offsetX, offsetY}
 
-		_, exists := duplicateItems[*offset]
+		_, exists := duplicates[*offset]
 		if exists {
-			duplicateItems[*offset]++
+			duplicates[*offset]++
 		} else {
-			duplicateItems[*offset] = 1
+			duplicates[*offset] = 1
+		}
+
+		// If the accumulative number of corresponding shift vectors is greater than
+		// a predefined threshold, the corresponding regions are marked as suspicious.
+		if duplicates[*offset] > FrequencyThreshold {
+			identicalBlocks = append(identicalBlocks, vector{
+				v.xa, v.xb, v.ya, v.yb, v.offsetX, v.offsetY,
+			})
 		}
 	}
-	fmt.Println(duplicateItems)
-	return nil
+	return identicalBlocks
 }
 
 // Implement sorting function on feature vector
