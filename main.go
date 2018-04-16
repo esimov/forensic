@@ -16,9 +16,9 @@ import (
 
 const (
 	BlockSize int = 4
-	MagnitudeThreshold = 0.5
-	SymmetryThreshold = 30
-	NeighboringBlocksThreshold = 0.5
+	MagnitudeThreshold = 0.2
+	SymmetryThreshold = 72
+	NeighboringBlocksThreshold = 25
 )
 
 // pixel struct contains the discrete cosine transformation R,G,B,Y values.
@@ -178,8 +178,12 @@ func main() {
 			vectors = append(vectors, *result)
 		}
 	}
+
 	simBlocks := getSuspiciousBlocks(vectors)
 	_, result := filterOutNeighbors(simBlocks)
+	//fmt.Println(len(vectors))
+	//fmt.Println(len(simBlocks))
+
 	fmt.Println("\n", result)
 
 	fmt.Printf("Features length: %d", len(features))
@@ -259,6 +263,7 @@ func getSuspiciousBlocks(vect []vector) newVector {
 			})
 		}
 	}
+	fmt.Println(suspiciousBlocks)
 	return suspiciousBlocks
 }
 
@@ -269,8 +274,9 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 
 	for i := 0; i < len(vect)-1; i++ {
 		blockA, blockB := vect[i], vect[i+1]
-		// Check if two regions are neighbors.
-		if blockA.xa == blockB.xa-1 && blockA.ya == blockB.ya-1 {
+
+		// Continue only if two regions are not neighbors.
+		if blockA.xa != blockB.xa && blockA.ya != blockB.ya {
 			// Calculate the euclidean distance between both regions.
 			dx := float64(blockA.xa - blockB.xa)
 			dy := float64(blockA.ya - blockB.ya)
@@ -278,8 +284,8 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 
 			// Evaluate the euclidean distance distance between two regions
 			// and make sure the distance is greater than a predefined threshold.
+			// TODO verify threshold value
 			if dist > NeighboringBlocksThreshold {
-				fmt.Println(dist)
 				forgedBlocks = append(forgedBlocks, vector{
 					vect[i].xa, vect[i].ya, vect[i].xb, vect[i].yb, vect[i].offsetX, vect[i].offsetY,
 				})
