@@ -17,7 +17,8 @@ import (
 const (
 	BlockSize int = 4
 	MagnitudeThreshold = 0.5
-	SymmetryThreshold = 40
+	SymmetryThreshold = 30
+	NeighboringBlocksThreshold = 0.5
 )
 
 // pixel struct contains the discrete cosine transformation R,G,B,Y values.
@@ -171,14 +172,15 @@ func main() {
 
 	for i := 0; i < len(features)-1; i++ {
 		blockA, blockB := features[i], features[i+1]
-		result := analyze(blockA, blockB)
+		result := analyzeBlocks(blockA, blockB)
 
 		if result != nil {
 			vectors = append(vectors, *result)
 		}
 	}
-	res := checkForSimilarity(vectors)
-	fmt.Println(res)
+	simBlocks := getSuspiciousBlocks(vectors)
+	_, result := filterOutNeighbors(simBlocks)
+	fmt.Println("\n", result)
 
 	fmt.Printf("Features length: %d", len(features))
 
@@ -201,8 +203,8 @@ func convertRGBImageToYUV(img image.Image) image.Image {
 	return yuvImage
 }
 
-// analyze checks weather two neighboring blocks are considered almost identical.
-func analyze(blockA, blockB feature) *vector {
+// analyzeBlocks checks weather two neighboring blocks are considered almost identical.
+func analyzeBlocks(blockA, blockB feature) *vector {
 	// Compute the euclidean distance between two neighboring blocks.
 	dx := float64(blockA.x) - float64(blockB.x)
 	dy := float64(blockA.y) - float64(blockB.y)
@@ -229,10 +231,10 @@ type offset struct {
 
 type newVector []vector
 
-// checkForSimilarity analyze pair of candidate and check for
+// getSuspiciousBlocks analyze pair of candidate and check for
 // similarity by computing the accumulative number of shift vectors.
-func checkForSimilarity(vect []vector) newVector {
-	var identicalBlocks newVector
+func getSuspiciousBlocks(vect []vector) newVector {
+	var suspiciousBlocks newVector
 	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
 	duplicates := make(map[offset]int)
 
@@ -252,17 +254,43 @@ func checkForSimilarity(vect []vector) newVector {
 		// If the accumulative number of corresponding shift vectors is greater than
 		// a predefined threshold, the corresponding regions are marked as suspicious.
 		if duplicates[*offset] > SymmetryThreshold {
-			identicalBlocks = append(identicalBlocks, vector{
-				v.xa, v.xb, v.ya, v.yb, v.offsetX, v.offsetY,
+			suspiciousBlocks = append(suspiciousBlocks, vector{
+				v.xa, v.ya, v.xb, v.yb, v.offsetX, v.offsetY,
 			})
 		}
 	}
-	return identicalBlocks
+	return suspiciousBlocks
 }
 
-// TODO filter out neighboring blocks.
-func filterOutNeighbors() {
-	
+// filterOutNeighbors filters out the neighboring blocks.
+func filterOutNeighbors(vect []vector) (newVector, bool) {
+	var forgedBlocks newVector
+	var isForged bool
+
+	for i := 0; i < len(vect)-1; i++ {
+		blockA, blockB := vect[i], vect[i+1]
+		// Check if two regions are neighbors.
+		if blockA.xa == blockB.xa-1 && blockA.ya == blockB.ya-1 {
+			// Calculate the euclidean distance between both regions.
+			dx := float64(blockA.xa - blockB.xa)
+			dy := float64(blockA.ya - blockB.ya)
+			dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
+
+			// Evaluate the euclidean distance distance between two regions
+			// and make sure the distance is greater than a predefined threshold.
+			if dist > NeighboringBlocksThreshold {
+				fmt.Println(dist)
+				forgedBlocks = append(forgedBlocks, vector{
+					vect[i].xa, vect[i].ya, vect[i].xb, vect[i].yb, vect[i].offsetX, vect[i].offsetY,
+				})
+				// We need to verify if an image is forged only once.
+				if !isForged {
+					isForged = true
+				}
+			}
+		}
+	}
+	return forgedBlocks, isForged
 }
 
 // dct computes the Discrete Cosine Transform.
