@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	BlockSize int = 4
-	MagnitudeThreshold = 0.2
-	SymmetryThreshold = 72
-	NeighboringBlocksThreshold = 25
+	BlockSize          int = 4
+	FrequencyThreshold     = 0.2
+	OffsetThreshold        = 276
+	ForgeryThreshold       = 305
 )
 
 // pixel struct contains the discrete cosine transformation R,G,B,Y values.
@@ -57,7 +57,7 @@ var (
 )
 
 func main() {
-	input, err := os.Open("test2.jpg")
+	input, err := os.Open("parade_forged.jpg")
 	defer input.Close()
 
 	if err != nil {
@@ -181,8 +181,6 @@ func main() {
 
 	simBlocks := getSuspiciousBlocks(vectors)
 	_, result := filterOutNeighbors(simBlocks)
-	//fmt.Println(len(vectors))
-	//fmt.Println(len(simBlocks))
 
 	fmt.Println("\n", result)
 
@@ -223,7 +221,7 @@ func analyzeBlocks(blockA, blockB feature) *vector {
 		offsetY: int(math.Abs(dy)),
 	}
 
-	if dist < MagnitudeThreshold {
+	if dist < FrequencyThreshold {
 		return res
 	}
 	return nil
@@ -257,13 +255,12 @@ func getSuspiciousBlocks(vect []vector) newVector {
 
 		// If the accumulative number of corresponding shift vectors is greater than
 		// a predefined threshold, the corresponding regions are marked as suspicious.
-		if duplicates[*offset] > SymmetryThreshold {
+		if duplicates[*offset] > OffsetThreshold {
 			suspiciousBlocks = append(suspiciousBlocks, vector{
 				v.xa, v.ya, v.xb, v.yb, v.offsetX, v.offsetY,
 			})
 		}
 	}
-	fmt.Println(suspiciousBlocks)
 	return suspiciousBlocks
 }
 
@@ -272,9 +269,8 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 	var forgedBlocks newVector
 	var isForged bool
 
-	for i := 0; i < len(vect)-1; i++ {
-		blockA, blockB := vect[i], vect[i+1]
-
+	for i := 1; i < len(vect); i++ {
+		blockA, blockB := vect[i-1], vect[i]
 		// Continue only if two regions are not neighbors.
 		if blockA.xa != blockB.xa && blockA.ya != blockB.ya {
 			// Calculate the euclidean distance between both regions.
@@ -285,7 +281,8 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 			// Evaluate the euclidean distance distance between two regions
 			// and make sure the distance is greater than a predefined threshold.
 			// TODO verify threshold value
-			if dist > NeighboringBlocksThreshold {
+			if dist > ForgeryThreshold {
+				fmt.Println(vect[i].xa, vect[i].ya)
 				forgedBlocks = append(forgedBlocks, vector{
 					vect[i].xa, vect[i].ya, vect[i].xb, vect[i].yb, vect[i].offsetX, vect[i].offsetY,
 				})
