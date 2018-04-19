@@ -144,10 +144,12 @@ func process(input image.Image, done chan struct{}) bool {
 	draw.Draw(output, image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()), img, image.ZP, draw.Src)
 
 	// Blur the image to eliminate the details.
-	blurImg := StackBlur(img, uint32(*blurRadius))
+	if *blurRadius > 0 {
+		img = StackBlur(img, uint32(*blurRadius))
+	}
 
 	// Convert image to YUV color space
-	yuv := convertRGBImageToYUV(blurImg)
+	yuv := convertRGBImageToYUV(img)
 	newImg := image.NewRGBA(yuv.Bounds())
 	draw.Draw(newImg, image.Rect(0, 0, yuv.Bounds().Dx(), yuv.Bounds().Dy()), yuv, image.ZP, draw.Src)
 
@@ -182,7 +184,7 @@ func process(input image.Image, done chan struct{}) bool {
 				for i := i0; i < i1; i += 4 {
 					// Get the YUV converted image pixels
 					yc, uc, vc, _ := b.Pix[i+0], b.Pix[i+2], b.Pix[i+2], b.Pix[i+3]
-					// Convert YUV to RGB and obtain the R value
+					// Convert YUV to RGB and obtain the R,G,B value
 					r, g, b := color.YCbCrToRGB(yc, uc, vc)
 
 					for x := 0; x < *blockSize; x++ {
@@ -248,7 +250,7 @@ func process(input image.Image, done chan struct{}) bool {
 	// Lexicographically sort the feature vectors
 	sort.Sort(featVec(features))
 
-	bar = pb.StartNew(len(features)-1)
+	bar = pb.StartNew(len(features) - 1)
 	bar.Prefix("Analyze: ")
 
 	for i := 0; i < len(features)-1; i++ {
@@ -268,6 +270,7 @@ func process(input image.Image, done chan struct{}) bool {
 	forgedImg := image.NewRGBA(img.Bounds())
 	overlay := color.RGBA{255, 0, 0, 255}
 
+	fmt.Println("Number of forged blocks detected: ", len(forgedBlocks))
 	for _, bl := range forgedBlocks {
 		draw.Draw(forgedImg, image.Rect(bl.xa, bl.ya, bl.xa+*blockSize*2, bl.ya+*blockSize*2), &image.Uniform{overlay}, image.ZP, draw.Over)
 	}
@@ -284,7 +287,7 @@ func process(input image.Image, done chan struct{}) bool {
 		fmt.Printf("Error encoding image file: %v", err)
 	}
 
-	done <- struct {}{}
+	done <- struct{}{}
 	return result
 }
 
@@ -377,23 +380,20 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 	for i := 1; i < len(vect); i++ {
 		blockA, blockB := vect[i-1], vect[i]
 
-		// Continue only if two regions are not neighbors.
-		if blockA.xa != blockB.xa && blockA.ya != blockB.ya {
-			// Calculate the euclidean distance between both regions.
-			dx := float64(blockA.xa - blockB.xa)
-			dy := float64(blockA.ya - blockB.ya)
-			dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
+		// Calculate the euclidean distance between both regions.
+		dx := float64(blockA.xa - blockB.xa)
+		dy := float64(blockA.ya - blockB.ya)
+		dist := math.Sqrt(math.Pow(dx, 2) + math.Pow(dy, 2))
 
-			// Evaluate the euclidean distance distance between two regions
-			// and make sure the distance is greater than a predefined threshold.
-			if dist > *forgeryThreshold {
-				forgedBlocks = append(forgedBlocks, vector{
-					blockA.xa, blockA.ya, blockA.xb, blockA.yb, blockA.offsetX, vect[i].offsetY,
-				})
-				// We need to verify if an image is forged only once.
-				if !isForged {
-					isForged = true
-				}
+		// Evaluate the euclidean distance distance between two regions
+		// and make sure the distance is greater than a predefined threshold.
+		if dist > *forgeryThreshold {
+			forgedBlocks = append(forgedBlocks, vector{
+				blockA.xa, blockA.ya, blockA.xb, blockA.yb, blockA.offsetX, vect[i].offsetY,
+			})
+			// We need to verify if an image is forged only once.
+			if !isForged {
+				isForged = true
 			}
 		}
 		bar.Increment()
