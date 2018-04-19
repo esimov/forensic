@@ -2,14 +2,32 @@
 
 
 [[projects]]
+  name = "github.com/mattn/go-runewidth"
+  packages = ["."]
+  revision = "9e777a8366cce605130a531d2cd6363d07ad7317"
+  version = "v0.0.2"
+
+[[projects]]
   branch = "master"
   name = "github.com/nfnt/resize"
   packages = ["."]
   revision = "83c6a9932646f83e3267f353373d47347b6036b2"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  revision = "3ccc7e5779793fd54564baf60c51bf017955e0ba"
+
+[[projects]]
+  name = "gopkg.in/cheggaaa/pb.v1"
+  packages = ["."]
+  revision = "72b964305fba1230d3d818711138195f22b9ceea"
+  version = "v1.0.22"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5726c315ea88a21cdd12e3a0963b997eea3baeda3a2d70472cab1a06db39dd70"
+  inputs-digest = "a4840115c99d7761cdce302ecf6c11af92b392c34e81b19c4c8798cc7cc4e17f"
   solver-name = "gps-cdcl"
   solver-version = 1
