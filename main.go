@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"image/color"
@@ -8,20 +9,43 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
+	"log"
 	"math"
 	"os"
 	"sort"
 	"time"
 
 	"github.com/nfnt/resize"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
-const (
-	BlockSize         int = 4
-	DistanceThreshold     = 0.4
-	OffsetThreshold       = 72
-	ForgeryThreshold      = 170
-	MaxImageSize          = 320
+// MaxImageSize is the resized image maximum width or height depending on the image ratio.
+const MaxImageSize = 320
+
+const Banner = `
+  __                          _
+ / _| ___  _ __ ___ _ __  ___(_) ___
+| |_ / _ \| '__/ _ \ '_ \/ __| |/ __|
+|  _| (_) | | |  __/ | | \__ \ | (__
+|_|  \___/|_|  \___|_| |_|___/_|\___|
+
+Image forgery detection library.
+    Version: %s
+
+`
+
+// Version indicates the current build version.
+var Version string
+
+var (
+	// Flags
+	source            = flag.String("in", "", "Source")
+	destination       = flag.String("out", "", "Destination")
+	blurRadius        = flag.Int("blur", 1, "Blur radius")
+	blockSize         = flag.Int("bs", 4, "Block size")
+	offsetThreshold   = flag.Int("ot", 72, "Offset threshold")
+	distanceThreshold = flag.Float64("dt", 0.4, "Distance threshold")
+	forgeryThreshold  = flag.Float64("ft", 210, "Forgery threshold")
 )
 
 // pixel struct contains the discrete cosine transformation R,G,B,Y values.
@@ -69,9 +93,20 @@ var (
 )
 
 func main() {
+	done := make(chan struct{})
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, fmt.Sprintf(Banner, Version))
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if len(*source) == 0 || len(*destination) == 0 {
+		log.Fatal("Usage: forensic -in input.jpg -out out.jpg")
+	}
+
 	start := time.Now()
 
-	input, err := os.Open("korea_forged.jpg")
+	input, err := os.Open(*source)
 	defer input.Close()
 
 	if err != nil {
@@ -90,12 +125,26 @@ func main() {
 		resizedImg = src
 	}
 
-	img := imgToNRGBA(resizedImg)
+	go func() {
+		result := process(resizedImg, done)
+		if result {
+			fmt.Println("\nThe image is forged!")
+		} else {
+			fmt.Println("\nThe image is not forged!")
+		}
+	}()
+	<-done
+
+	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
+}
+
+func process(input image.Image, done chan struct{}) bool {
+	img := imgToNRGBA(input)
 	output := image.NewRGBA(img.Bounds())
 	draw.Draw(output, image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()), img, image.ZP, draw.Src)
 
 	// Blur the image to eliminate the details.
-	blurImg := StackBlur(img, 1)
+	blurImg := StackBlur(img, uint32(*blurRadius))
 
 	// Convert image to YUV color space
 	yuv := convertRGBImageToYUV(blurImg)
@@ -103,18 +152,20 @@ func main() {
 	draw.Draw(newImg, image.Rect(0, 0, yuv.Bounds().Dx(), yuv.Bounds().Dy()), yuv, image.ZP, draw.Src)
 
 	dx, dy := yuv.Bounds().Max.X, yuv.Bounds().Max.Y
-	bdx, bdy := (dx - BlockSize + 1), (dy - BlockSize + 1)
+	bdx, bdy := (dx - *blockSize + 1), (dy - *blockSize + 1)
 	n := math.Max(float64(dx), float64(dy))
 
 	var blocks []imageBlock
 	for i := 0; i < bdx; i++ {
 		for j := 0; j < bdy; j++ {
-			r := image.Rect(i, j, i+BlockSize, j+BlockSize)
+			r := image.Rect(i, j, i+*blockSize, j+*blockSize)
 			block := newImg.SubImage(r).(*image.RGBA)
 			blocks = append(blocks, imageBlock{x: i, y: j, img: block})
-			//draw.Draw(newImg, image.Rect(0, 0, yuv.Bounds().Max.X, yuv.Bounds().Max.Y), block, image.ZP, draw.Src)
 		}
 	}
+
+	bar := pb.StartNew(len(blocks))
+	bar.Prefix("Generate: ")
 
 	for _, block := range blocks {
 		// Average RGB value.
@@ -124,23 +175,23 @@ func main() {
 		i0 := b.PixOffset(b.Bounds().Min.X, b.Bounds().Min.Y)
 		i1 := i0 + b.Bounds().Dx()*4
 
-		dctPixels := make(dctPx, BlockSize*BlockSize)
-		for u := 0; u < BlockSize; u++ {
-			dctPixels[u] = make([]pixel, BlockSize)
-			for v := 0; v < BlockSize; v++ {
+		dctPixels := make(dctPx, *blockSize**blockSize)
+		for u := 0; u < *blockSize; u++ {
+			dctPixels[u] = make([]pixel, *blockSize)
+			for v := 0; v < *blockSize; v++ {
 				for i := i0; i < i1; i += 4 {
 					// Get the YUV converted image pixels
 					yc, uc, vc, _ := b.Pix[i+0], b.Pix[i+2], b.Pix[i+2], b.Pix[i+3]
 					// Convert YUV to RGB and obtain the R value
 					r, g, b := color.YCbCrToRGB(yc, uc, vc)
 
-					for x := 0; x < BlockSize; x++ {
-						for y := 0; y < BlockSize; y++ {
+					for x := 0; x < *blockSize; x++ {
+						for y := 0; y < *blockSize; y++ {
 							// Compute Discrete Cosine coefficients
-							cr += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(r)
-							cg += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(g)
-							cb += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(b)
-							cy += dct(float64(x), float64(y), float64(u), float64(v), float64(BlockSize)) * float64(yc)
+							cr += dct(float64(x), float64(y), float64(u), float64(v), float64(*blockSize)) * float64(r)
+							cg += dct(float64(x), float64(y), float64(u), float64(v), float64(*blockSize)) * float64(g)
+							cb += dct(float64(x), float64(y), float64(u), float64(v), float64(*blockSize)) * float64(b)
+							cy += dct(float64(x), float64(y), float64(u), float64(v), float64(*blockSize)) * float64(yc)
 
 							avr += float64(r)
 							avg += float64(g)
@@ -167,15 +218,17 @@ func main() {
 				dctPixels[u][v] = pixel{cr, cg, cb, cy}
 
 				// Get the quantized DCT coefficients.
-				dctPixels[u][v].r = (dctPixels[u][v].r / q4x4[u][v])
-				dctPixels[u][v].g = (dctPixels[u][v].g / q4x4[u][v])
-				dctPixels[u][v].b = (dctPixels[u][v].b / q4x4[u][v])
-				dctPixels[u][v].y = (dctPixels[u][v].y / q4x4[u][v])
+				if *blockSize <= 4 {
+					dctPixels[u][v].r = dctPixels[u][v].r / q4x4[u][v]
+					dctPixels[u][v].g = dctPixels[u][v].g / q4x4[u][v]
+					dctPixels[u][v].b = dctPixels[u][v].b / q4x4[u][v]
+					dctPixels[u][v].y = dctPixels[u][v].y / q4x4[u][v]
+				}
 			}
 		}
-		avr /= float64(BlockSize * BlockSize)
-		avg /= float64(BlockSize * BlockSize)
-		avb /= float64(BlockSize * BlockSize)
+		avr /= float64(*blockSize * *blockSize)
+		avg /= float64(*blockSize * *blockSize)
+		avb /= float64(*blockSize * *blockSize)
 
 		features = append(features, feature{x: block.x, y: block.y, coef: dctPixels[0][0].y})
 		features = append(features, feature{x: block.x, y: block.y, coef: dctPixels[0][1].y})
@@ -188,10 +241,15 @@ func main() {
 		features = append(features, feature{x: block.x, y: block.y, coef: avr})
 		features = append(features, feature{x: block.x, y: block.y, coef: avb})
 		features = append(features, feature{x: block.x, y: block.y, coef: avg})
+		bar.Increment()
 	}
+	bar.Finish()
 
 	// Lexicographically sort the feature vectors
 	sort.Sort(featVec(features))
+
+	bar = pb.StartNew(len(features)-1)
+	bar.Prefix("Analyze: ")
 
 	for i := 0; i < len(features)-1; i++ {
 		blockA, blockB := features[i], features[i+1]
@@ -200,7 +258,9 @@ func main() {
 		if result != nil {
 			vectors = append(vectors, *result)
 		}
+		bar.Increment()
 	}
+	bar.Finish()
 
 	simBlocks := getSuspiciousBlocks(vectors)
 	forgedBlocks, result := filterOutNeighbors(simBlocks)
@@ -209,13 +269,13 @@ func main() {
 	overlay := color.RGBA{255, 0, 0, 255}
 
 	for _, bl := range forgedBlocks {
-		draw.Draw(forgedImg, image.Rect(bl.xa, bl.ya, bl.xa+BlockSize*2, bl.ya+BlockSize*2), &image.Uniform{overlay}, image.ZP, draw.Over)
+		draw.Draw(forgedImg, image.Rect(bl.xa, bl.ya, bl.xa+*blockSize*2, bl.ya+*blockSize*2), &image.Uniform{overlay}, image.ZP, draw.Over)
 	}
 
 	final := StackBlur(imgToNRGBA(forgedImg), 10)
 	draw.Draw(output, img.Bounds(), final, image.ZP, draw.Over)
 
-	out, err := os.Create("output.png")
+	out, err := os.Create(*destination)
 	if err != nil {
 		fmt.Printf("Error creating output file: %v", err)
 	}
@@ -224,8 +284,8 @@ func main() {
 		fmt.Printf("Error encoding image file: %v", err)
 	}
 
-	fmt.Println("\n", result)
-	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
+	done <- struct {}{}
+	return result
 }
 
 //convertRGBImageToYUV coverts the image from RGB to YUV color space.
@@ -260,7 +320,7 @@ func analyzeBlocks(blockA, blockB feature) *vector {
 		offsetY: math.Abs(dy),
 	}
 
-	if dist < DistanceThreshold {
+	if dist < *distanceThreshold {
 		return res
 	}
 	return nil
@@ -279,6 +339,8 @@ func getSuspiciousBlocks(vect []vector) newVector {
 	//For each pair of candidate compute the accumulative number of the corresponding shift vectors.
 	duplicates := make(map[offset]int)
 
+	bar := pb.StartNew(len(vect)).Prefix("Detect: ")
+
 	for _, v := range vect {
 		// Check for duplicate blocks
 		offsetX := v.offsetX
@@ -294,13 +356,14 @@ func getSuspiciousBlocks(vect []vector) newVector {
 
 		// If the accumulative number of corresponding shift vectors is greater than
 		// a predefined threshold, the corresponding regions are marked as suspicious.
-		if duplicates[*offset] > OffsetThreshold {
+		if duplicates[*offset] > *offsetThreshold {
 			suspiciousBlocks = append(suspiciousBlocks, vector{
 				v.xa, v.ya, v.xb, v.yb, v.offsetX, v.offsetY,
 			})
 		}
+		bar.Increment()
 	}
-	fmt.Println("Blocks: ", len(suspiciousBlocks))
+	bar.Finish()
 	return suspiciousBlocks
 }
 
@@ -308,6 +371,8 @@ func getSuspiciousBlocks(vect []vector) newVector {
 func filterOutNeighbors(vect []vector) (newVector, bool) {
 	var forgedBlocks newVector
 	var isForged bool
+
+	bar := pb.StartNew(len(vect)).Prefix("Filter: ")
 
 	for i := 1; i < len(vect); i++ {
 		blockA, blockB := vect[i-1], vect[i]
@@ -321,7 +386,7 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 
 			// Evaluate the euclidean distance distance between two regions
 			// and make sure the distance is greater than a predefined threshold.
-			if dist > ForgeryThreshold {
+			if dist > *forgeryThreshold {
 				forgedBlocks = append(forgedBlocks, vector{
 					blockA.xa, blockA.ya, blockA.xb, blockA.yb, blockA.offsetX, vect[i].offsetY,
 				})
@@ -331,7 +396,9 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 				}
 			}
 		}
+		bar.Increment()
 	}
+	bar.Finish()
 	return forgedBlocks, isForged
 }
 
