@@ -12,21 +12,17 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"github.com/nfnt/resize"
 )
 
 const (
 	BlockSize         int = 4
 	DistanceThreshold     = 0.4
 	OffsetThreshold       = 72
-	ForgeryThreshold      = 250
+	ForgeryThreshold      = 170
+	MaxImageSize          = 320
 )
-
-var q4x4 = [][]float64{
-	{16.0, 10.0, 24.0, 51.0},
-	{14.0, 16.0, 40.0, 69.0},
-	{18.0, 37.0, 68.0, 103.0},
-	{49.0, 78.0, 103.0, 120.0},
-}
 
 // pixel struct contains the discrete cosine transformation R,G,B,Y values.
 type pixel struct {
@@ -57,7 +53,16 @@ type feature struct {
 	coef float64
 }
 
+// q4x4 is the quantization matrix table.
+var q4x4 = [][]float64{
+	{16.0, 10.0, 24.0, 51.0},
+	{14.0, 16.0, 40.0, 69.0},
+	{18.0, 37.0, 68.0, 103.0},
+	{49.0, 78.0, 103.0, 120.0},
+}
+
 var (
+	resizedImg     image.Image
 	features       []feature
 	vectors        []vector
 	cr, cg, cb, cy float64
@@ -66,7 +71,7 @@ var (
 func main() {
 	start := time.Now()
 
-	input, err := os.Open("parade_forged.jpg")
+	input, err := os.Open("korea_forged.jpg")
 	defer input.Close()
 
 	if err != nil {
@@ -77,7 +82,15 @@ func main() {
 		fmt.Printf("Error decoding the image: %v", err)
 	}
 
-	img := imgToNRGBA(src)
+	if src.Bounds().Dx() > MaxImageSize {
+		resizedImg = resize.Resize(MaxImageSize, 0, src, resize.Lanczos3)
+	} else if src.Bounds().Dy() > MaxImageSize {
+		resizedImg = resize.Resize(0, MaxImageSize, src, resize.Lanczos3)
+	} else {
+		resizedImg = src
+	}
+
+	img := imgToNRGBA(resizedImg)
 	output := image.NewRGBA(img.Bounds())
 	draw.Draw(output, image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()), img, image.ZP, draw.Src)
 
@@ -103,23 +116,21 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Len: %d\n", len(blocks))
-
 	for _, block := range blocks {
 		// Average RGB value.
 		var avr, avg, avb float64
 
 		b := block.img.(*image.RGBA)
 		i0 := b.PixOffset(b.Bounds().Min.X, b.Bounds().Min.Y)
-		i1 := i0 + b.Bounds().Dx() * 4
+		i1 := i0 + b.Bounds().Dx()*4
 
-		dctPixels := make(dctPx, BlockSize * BlockSize)
+		dctPixels := make(dctPx, BlockSize*BlockSize)
 		for u := 0; u < BlockSize; u++ {
 			dctPixels[u] = make([]pixel, BlockSize)
 			for v := 0; v < BlockSize; v++ {
 				for i := i0; i < i1; i += 4 {
 					// Get the YUV converted image pixels
-					yc, uc, vc, _ := b.Pix[i + 0], b.Pix[i + 2], b.Pix[i + 2], b.Pix[i + 3]
+					yc, uc, vc, _ := b.Pix[i+0], b.Pix[i+2], b.Pix[i+2], b.Pix[i+3]
 					// Convert YUV to RGB and obtain the R value
 					r, g, b := color.YCbCrToRGB(yc, uc, vc)
 
@@ -214,9 +225,6 @@ func main() {
 	}
 
 	fmt.Println("\n", result)
-
-	fmt.Printf("Features length: %d", len(features))
-
 	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
 }
 
@@ -349,47 +357,6 @@ func idct(u, v, x, y, w float64) float64 {
 	return dct(u, v, x, y, w) * alpha(u) * alpha(v)
 }
 
-// round rounds float number to it's nearest integer part.
-func round(x float64) float64 {
-	t := math.Trunc(x)
-	if math.Abs(x-t) >= 0.5 {
-		return t + math.Copysign(1, x)
-	}
-	return t
-}
-
-// clamp255 converts a float64 number to uint8.
-func clamp255(x float64) uint8 {
-	if x < 0 {
-		return 0
-	}
-	if x > 255 {
-		return 255
-	}
-	return uint8(x)
-}
-
-// max returns the biggest value between two numbers.
-func max(x, y int) float64 {
-	if x > y {
-		return float64(x)
-	}
-	return float64(y)
-}
-
-// unique returns slice's unique values.
-func unique(intSlice []int) []int {
-	keys := make(map[int]bool)
-	list := []int{}
-	for _, entry := range intSlice {
-		if _, value := keys[entry]; !value {
-			keys[entry] = true
-			list = append(list, entry)
-		}
-	}
-	return list
-}
-
 // Implement sorting function on feature vector
 type featVec []feature
 
@@ -403,78 +370,4 @@ func (a featVec) Less(i, j int) bool {
 		return false
 	}
 	return a[i].coef < a[j].coef
-}
-
-func RGBtoYUV(r, g, b uint32) (uint32, uint32, uint32) {
-	y := 0.299*float64(r) + 0.587*float64(g) + 0.114*float64(b)
-	u := (((float64(b) - float64(y)) * 0.493) + 111) / 222 * 255
-	v := (((float64(r) - float64(y)) * 0.877) + 155) / 312 * 255
-
-	return uint32(y), uint32(u), uint32(v)
-}
-
-func YUVtoRGB(y, u, v uint32) (uint32, uint32, uint32) {
-	r := float64(y) + (1.13983 * float64(v))
-	g := float64(y) - (0.39465 * float64(u)) - (0.58060 * float64(v))
-	b := float64(y) + (2.03211 * float64(u))
-
-	return uint32(r), uint32(g), uint32(b)
-}
-
-// Converts any image type to *image.NRGBA with min-point at (0, 0).
-func imgToNRGBA(img image.Image) *image.NRGBA {
-	srcBounds := img.Bounds()
-	if srcBounds.Min.X == 0 && srcBounds.Min.Y == 0 {
-		if src0, ok := img.(*image.NRGBA); ok {
-			return src0
-		}
-	}
-	srcMinX := srcBounds.Min.X
-	srcMinY := srcBounds.Min.Y
-
-	dstBounds := srcBounds.Sub(srcBounds.Min)
-	dstW := dstBounds.Dx()
-	dstH := dstBounds.Dy()
-	dst := image.NewNRGBA(dstBounds)
-
-	switch src := img.(type) {
-	case *image.NRGBA:
-		rowSize := srcBounds.Dx() * 4
-		for dstY := 0; dstY < dstH; dstY++ {
-			di := dst.PixOffset(0, dstY)
-			si := src.PixOffset(srcMinX, srcMinY+dstY)
-			for dstX := 0; dstX < dstW; dstX++ {
-				copy(dst.Pix[di:di+rowSize], src.Pix[si:si+rowSize])
-			}
-		}
-	case *image.YCbCr:
-		for dstY := 0; dstY < dstH; dstY++ {
-			di := dst.PixOffset(0, dstY)
-			for dstX := 0; dstX < dstW; dstX++ {
-				srcX := srcMinX + dstX
-				srcY := srcMinY + dstY
-				siy := src.YOffset(srcX, srcY)
-				sic := src.COffset(srcX, srcY)
-				r, g, b := color.YCbCrToRGB(src.Y[siy], src.Cb[sic], src.Cr[sic])
-				dst.Pix[di+0] = r
-				dst.Pix[di+1] = g
-				dst.Pix[di+2] = b
-				dst.Pix[di+3] = 0xff
-				di += 4
-			}
-		}
-	default:
-		for dstY := 0; dstY < dstH; dstY++ {
-			di := dst.PixOffset(0, dstY)
-			for dstX := 0; dstX < dstW; dstX++ {
-				c := color.NRGBAModel.Convert(img.At(srcMinX+dstX, srcMinY+dstY)).(color.NRGBA)
-				dst.Pix[di+0] = c.R
-				dst.Pix[di+1] = c.G
-				dst.Pix[di+2] = c.B
-				dst.Pix[di+3] = c.A
-				di += 4
-			}
-		}
-	}
-	return dst
 }
