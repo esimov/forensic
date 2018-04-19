@@ -18,7 +18,7 @@ const (
 	BlockSize         int = 4
 	DistanceThreshold     = 0.4
 	OffsetThreshold       = 72
-	ForgeryThreshold      = 220
+	ForgeryThreshold      = 250
 )
 
 var q4x4 = [][]float64{
@@ -194,10 +194,15 @@ func main() {
 	simBlocks := getSuspiciousBlocks(vectors)
 	forgedBlocks, result := filterOutNeighbors(simBlocks)
 
+	forgedImg := image.NewRGBA(img.Bounds())
+	overlay := color.RGBA{255, 0, 0, 255}
+
 	for _, bl := range forgedBlocks {
-		background := color.RGBA{255, 0, 0, 255}
-		draw.Draw(output, image.Rect(bl.xa, bl.ya, bl.xa+BlockSize, bl.ya+BlockSize), &image.Uniform{background}, image.ZP, draw.Src)
+		draw.Draw(forgedImg, image.Rect(bl.xa, bl.ya, bl.xa+BlockSize*2, bl.ya+BlockSize*2), &image.Uniform{overlay}, image.ZP, draw.Over)
 	}
+
+	final := StackBlur(imgToNRGBA(forgedImg), 10)
+	draw.Draw(output, img.Bounds(), final, image.ZP, draw.Over)
 
 	out, err := os.Create("output.png")
 	if err != nil {
@@ -310,7 +315,7 @@ func filterOutNeighbors(vect []vector) (newVector, bool) {
 			// and make sure the distance is greater than a predefined threshold.
 			if dist > ForgeryThreshold {
 				forgedBlocks = append(forgedBlocks, vector{
-					vect[i].xa, vect[i].ya, vect[i].xb, vect[i].yb, vect[i].offsetX, vect[i].offsetY,
+					blockA.xa, blockA.ya, blockA.xb, blockA.yb, blockA.offsetX, vect[i].offsetY,
 				})
 				// We need to verify if an image is forged only once.
 				if !isForged {
