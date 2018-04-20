@@ -47,6 +47,7 @@ func unique(intSlice []int) []int {
 	return list
 }
 
+// RGBtoYUV converts RGB to YUV color space.
 func RGBtoYUV(r, g, b uint32) (uint32, uint32, uint32) {
 	y := 0.299*float64(r) + 0.587*float64(g) + 0.114*float64(b)
 	u := (((float64(b) - float64(y)) * 0.493) + 111) / 222 * 255
@@ -55,6 +56,7 @@ func RGBtoYUV(r, g, b uint32) (uint32, uint32, uint32) {
 	return uint32(y), uint32(u), uint32(v)
 }
 
+// YUVtoRGB converts YUV to RGB color space.
 func YUVtoRGB(y, u, v uint32) (uint32, uint32, uint32) {
 	r := float64(y) + (1.13983 * float64(v))
 	g := float64(y) - (0.39465 * float64(u)) - (0.58060 * float64(v))

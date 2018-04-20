@@ -138,6 +138,7 @@ func main() {
 	fmt.Printf("\nDone in: %.2fs\n", time.Since(start).Seconds())
 }
 
+// process analyze the input image and detect forgeries.
 func process(input image.Image, done chan struct{}) bool {
 	img := imgToNRGBA(input)
 	output := image.NewRGBA(img.Bounds())
@@ -268,7 +269,7 @@ func process(input image.Image, done chan struct{}) bool {
 	forgedBlocks, result := filterOutNeighbors(simBlocks)
 
 	forgedImg := image.NewRGBA(img.Bounds())
-	overlay := color.RGBA{255, 0, 0, 255}
+	overlay := color.RGBA{255, 0, 255, 255}
 
 	fmt.Println("Number of forged blocks detected: ", len(forgedBlocks))
 	for _, bl := range forgedBlocks {
