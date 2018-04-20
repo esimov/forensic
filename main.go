@@ -110,11 +110,11 @@ func main() {
 	defer input.Close()
 
 	if err != nil {
-		fmt.Printf("Error reading the image file: %v", err)
+		log.Fatalf("Error reading the image file: %v", err)
 	}
 	src, _, err := image.Decode(input)
 	if err != nil {
-		fmt.Printf("Error decoding the image: %v", err)
+		log.Fatalf("Error decoding the image: %v", err)
 	}
 
 	if src.Bounds().Dx() > MaxImageSize {
