@@ -167,7 +167,7 @@ func process(input image.Image, done chan struct{}) bool {
 	}
 
 	bar := pb.StartNew(len(blocks))
-	bar.Prefix("Generate: ")
+	bar.Prefix("Generate blocks: ")
 
 	for _, block := range blocks {
 		// Average RGB value.
