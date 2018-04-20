@@ -269,7 +269,7 @@ func process(input image.Image, done chan struct{}) bool {
 	forgedBlocks, result := filterOutNeighbors(simBlocks)
 
 	forgedImg := image.NewRGBA(img.Bounds())
-	overlay := color.RGBA{255, 0, 255, 255}
+	overlay := color.RGBA{255, 0, 0, 255}
 
 	fmt.Println("Number of forged blocks detected: ", len(forgedBlocks))
 	for _, bl := range forgedBlocks {
