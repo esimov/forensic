@@ -76,6 +76,4 @@ The library sometimes produce false positive detection, depending on the image c
 
 ## License
 
-Copyright © 2018 Endre Simo
-
 This project is under the MIT License. See the LICENSE file for the full license text.
