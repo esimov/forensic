@@ -183,7 +183,7 @@ func process(input image.Image, done chan struct{}) bool {
 			dctPixels[u] = make([]pixel, *blockSize)
 			for v := 0; v < *blockSize; v++ {
 				for i := i0; i < i1; i += 4 {
-					// Get the YUV converted image pixels
+					// Obtain the pixels converted to YUV color space
 					yc, uc, vc, _ := b.Pix[i+0], b.Pix[i+2], b.Pix[i+2], b.Pix[i+3]
 					// Convert YUV to RGB and obtain the R,G,B value
 					r, g, b := color.YCbCrToRGB(yc, uc, vc)
@@ -203,7 +203,7 @@ func process(input image.Image, done chan struct{}) bool {
 					}
 				}
 
-				// normalization
+				// Normalize alpha channel.
 				alpha := func(a float64) float64 {
 					if a == 0 {
 						return math.Sqrt(1.0 / float64(n))
@@ -220,7 +220,7 @@ func process(input image.Image, done chan struct{}) bool {
 
 				dctPixels[u][v] = pixel{cr, cg, cb, cy}
 
-				// Get the quantized DCT coefficients.
+				// Obtain the quantized DCT coefficients.
 				if *blockSize <= 4 {
 					dctPixels[u][v].r = dctPixels[u][v].r / q4x4[u][v]
 					dctPixels[u][v].g = dctPixels[u][v].g / q4x4[u][v]
