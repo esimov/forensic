@@ -39,8 +39,8 @@ var Version string
 
 var (
 	// Flags
-	source            = flag.String("in", "", "Source")
-	destination       = flag.String("out", "", "Destination")
+	source            = flag.String("in", "", "Input image")
+	destination       = flag.String("out", "", "Output image")
 	blurRadius        = flag.Int("blur", 1, "Blur radius")
 	blockSize         = flag.Int("bs", 4, "Block size")
 	offsetThreshold   = flag.Int("ot", 72, "Offset threshold")
@@ -126,12 +126,15 @@ func main() {
 	}
 
 	go func() {
-		result := process(resizedImg, done)
-		if result {
-			fmt.Println("\nThe image is forged!")
+		var output string
+		precision := float64(process(resizedImg, done))
+		if precision > 50.0 {
+			output = fmt.Sprintf("%.0f%% the image is forged!", precision)
 		} else {
-			fmt.Println("\nThe image is not forged!")
+			precision = 100 - precision
+			output = fmt.Sprintf("%.0f%% the image is NOT forged!", precision)
 		}
+		fmt.Println(output)
 	}()
 	<-done
 
@@ -139,7 +142,8 @@ func main() {
 }
 
 // process analyze the input image and detect forgeries.
-func process(input image.Image, done chan struct{}) bool {
+// It returns the precision score and a boolean value indication
+func process(input image.Image, done chan struct{}) float64 {
 	img := imgToNRGBA(input)
 	output := image.NewRGBA(img.Bounds())
 	draw.Draw(output, image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()), img, image.ZP, draw.Src)
@@ -266,12 +270,21 @@ func process(input image.Image, done chan struct{}) bool {
 	bar.Finish()
 
 	simBlocks := getSuspiciousBlocks(vectors)
-	forgedBlocks, result := filterOutNeighbors(simBlocks)
+	forgedBlocks, _ := filterOutNeighbors(simBlocks)
+
+	simBlocksNum := len(simBlocks)
+	forgedBlocksNum := len(forgedBlocks)
+
+	// precision indicated the detection accuracy.
+	var precision = 0.0
+	if forgedBlocksNum > 0 {
+		precision = 100 - (float64(forgedBlocksNum) / (float64(forgedBlocksNum + simBlocksNum)) * 100)
+	}
 
 	forgedImg := image.NewRGBA(img.Bounds())
 	overlay := color.RGBA{255, 0, 0, 255}
 
-	fmt.Println("Number of forged blocks detected: ", len(forgedBlocks))
+	fmt.Println("\nNumber of forged blocks detected: ", forgedBlocksNum)
 	for _, bl := range forgedBlocks {
 		draw.Draw(forgedImg, image.Rect(bl.xa, bl.ya, bl.xa+*blockSize*2, bl.ya+*blockSize*2), &image.Uniform{overlay}, image.ZP, draw.Over)
 	}
@@ -287,9 +300,9 @@ func process(input image.Image, done chan struct{}) bool {
 	if err := png.Encode(out, output); err != nil {
 		fmt.Printf("Error encoding image file: %v", err)
 	}
-
 	done <- struct{}{}
-	return result
+
+	return precision
 }
 
 //convertRGBImageToYUV coverts the image from RGB to YUV color space.
