@@ -53,11 +53,11 @@ Image forgery detection library.
   -ft float
     	Forgery threshold (default 210)
   -in string
-    	Source
+    	Input image
   -ot int
     	Offset threshold (default 72)
   -out string
-    	Destination
+    	Output image
 ```
 
 ## Results
