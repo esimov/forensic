@@ -104,6 +104,10 @@ func main() {
 		log.Fatal("Usage: forensic -in input.jpg -out out.jpg")
 	}
 
+	if *blockSize <= 1 {
+		log.Fatal("ERROR: the block size must be greater then 1.")
+	}
+
 	start := time.Now()
 
 	input, err := os.Open(*source)
@@ -172,7 +176,7 @@ func process(input image.Image, done chan struct{}) float64 {
 	}
 
 	bar := pb.StartNew(len(blocks))
-	bar.Prefix("Generate blocks: ")
+	bar.Prefix("Generate: ")
 
 	for _, block := range blocks {
 		// Average RGB value.
@@ -275,7 +279,7 @@ func process(input image.Image, done chan struct{}) float64 {
 	simBlocksNum := len(simBlocks)
 	forgedBlocksNum := len(forgedBlocks)
 
-	// precision indicated the detection accuracy.
+	// precision indicates the detection accuracy
 	var precision = 0.0
 	if forgedBlocksNum > 0 {
 		precision = 100 - (float64(forgedBlocksNum) / (float64(forgedBlocksNum + simBlocksNum)) * 100)
