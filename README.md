@@ -68,6 +68,12 @@ Image forgery detection library.
 ### Notice
 The library sometimes produce false positive detection, depending on the image content. For this reason i advice to adjust the settings. Also sometimes the human judgement is required, but in the most cases the library do a pretty good job in detecting forged images. The more intensive the overlayed color is, the more certain is that the image is tampered.
 
+## Author
+
+* Endre Simo
+
 ## License
+
+Copyright © 2018 Endre Simo
 
 This project is under the MIT License. See the LICENSE file for the full license text.
