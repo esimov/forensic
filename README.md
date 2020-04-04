@@ -16,7 +16,7 @@ Forensic is an image processing library which aims to detect copy-move forgeries
 * For each pair of candidate compute the cumulative number of shift vectors (how many times the same block is detected). If that number is greater than a predefined threshold the corresponding regions are considered forged.
 
 ## Install
-First install Go if you haven't installed already, set your `GOPATH`, and make sure `$GOPATH/bin` is on your `PATH`.
+First install Go if you don't have already installed, set your `GOPATH`, and make sure `$GOPATH/bin` is in your `PATH` environment variable.
 
 ```bash
 $ export GOPATH="$HOME/go"
@@ -66,11 +66,14 @@ Image forgery detection library.
 | ![dogs_original](https://user-images.githubusercontent.com/883386/39047347-3fee70cc-44a2-11e8-8729-c4312c631017.jpg) | ![dogs_forged](https://user-images.githubusercontent.com/883386/39047218-c1c8c530-44a1-11e8-8eb6-f9a8470848bd.jpg) | ![dogs_result](https://user-images.githubusercontent.com/883386/39047481-aec6f0f0-44a2-11e8-9f0f-041b9f2a0eb4.png) |
 
 ### Notice
-The library sometimes produce false positive detection, depending on the image content. For this reason i advice to adjust the settings. Also sometimes the human judgement is required, but in the most cases the library do a pretty good job in detecting forged images. The more intensive the overlayed color is, the more certain is that the image is tampered.
+Sometimes the library produces false positive results depending on the image content. For this reason I advise to adjust the settings. Also in some cases human judgement is required, but otherwise the library do a decent job in detecting forged images. 
+
+### How to interpret the results?
+The more intensive the overlayed color is, the more certain is that the image is tampered.
 
 ## Author
 
-* Endre Simo
+* Endre Simo ([@simo_endre](https://twitter.com/simo_endre))
 
 ## License
 
