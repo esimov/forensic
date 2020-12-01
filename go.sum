@@ -1,0 +1,8 @@
+github.com/mattn/go-runewidth v0.0.2 h1:UnlwIPBGaTZfPQ6T1IGzPI0EkYAQmT9fAEJ/poFC63o=
+github.com/mattn/go-runewidth v0.0.2/go.mod h1:LwmH8dsx7+W8Uxz3IHJYH5QSwggIsqBzpuz5H//U1FU=
+github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 h1:zYyBkD/k9seD2A7fsi6Oo2LfFZAehjjQMERAvZLEDnQ=
+github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646/go.mod h1:jpp1/29i3P1S/RLdc7JQKbRpFeM1dOBd8T9ki5s+AY8=
+golang.org/x/sys v0.0.0-20180418212419-3ccc7e577979 h1:QXKsWyZDeea6uG1DcvsBbDE10dokQULIwN56Vhf5DO4=
+golang.org/x/sys v0.0.0-20180418212419-3ccc7e577979/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+gopkg.in/cheggaaa/pb.v1 v1.0.22 h1:c9uUtBcJbskglPcslP+bFq43Y9mR+Hja6qPRW0bsOJ0=
+gopkg.in/cheggaaa/pb.v1 v1.0.22/go.mod h1:V/YB90LKu/1FcN3WVnfiiE5oMCibMjukxqG/qStrOgw=
