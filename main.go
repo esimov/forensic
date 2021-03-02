@@ -23,11 +23,9 @@ import (
 const MaxImageSize = 320
 
 const Banner = `
-  __                          _
- / _| ___  _ __ ___ _ __  ___(_) ___
-| |_ / _ \| '__/ _ \ '_ \/ __| |/ __|
-|  _| (_) | | |  __/ | | \__ \ | (__
-|_|  \___/|_|  \___|_| |_|___/_|\___|
+┌─┐┌─┐┬─┐┌─┐┌┐┌┌─┐┬┌─┐
+├┤ │ │├┬┘├┤ │││└─┐││
+└  └─┘┴└─└─┘┘└┘└─┘┴└─┘
 
 Image forgery detection library.
     Version: %s
@@ -445,14 +443,6 @@ func idct(u, v, x, y, w float64) float64 {
 // Implement sorting function on feature vector
 type featVec []feature
 
-func (a featVec) Len() int      { return len(a) }
-func (a featVec) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a featVec) Less(i, j int) bool {
-	if a[i].coef < a[j].coef {
-		return true
-	}
-	if a[i].coef > a[j].coef {
-		return false
-	}
-	return a[i].coef < a[j].coef
-}
+func (a featVec) Len() int           { return len(a) }
+func (a featVec) Less(i, j int) bool { return a[i].coef < a[j].coef }
+func (a featVec) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
