@@ -1,6 +1,7 @@
 # Forensic
 
 [![build](https://github.com/esimov/forensic/actions/workflows/build.yml/badge.svg)](https://github.com/esimov/forensic/actions/workflows/build.yml)
+[![license](https://img.shields.io/github/license/esimov/forensic)](./LICENSE)
 
 Forensic is an image processing library which aims to detect copy-move forgeries in digital images. The implementation is mainly based on this paper: https://arxiv.org/pdf/1308.5661.pdf
 
