@@ -1,6 +1,6 @@
 # Forensic
 
-[![Build Status](https://travis-ci.org/esimov/forensic.svg?branch=master)](https://travis-ci.org/esimov/forensic)
+[![build](https://github.com/esimov/forensic/actions/workflows/build.yml/badge.svg)](https://github.com/esimov/forensic/actions/workflows/build.yml)
 
 Forensic is an image processing library which aims to detect copy-move forgeries in digital images. The implementation is mainly based on this paper: https://arxiv.org/pdf/1308.5661.pdf
 
